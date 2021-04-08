@@ -5,7 +5,7 @@ REM -------------------------------------
 
 @echo off
 echo Start driver installations...
-pnputil.exe /add-driver .\GraphicsDriver\iigd_dch.inf /install
+pnputil.exe /add-driver .\GraphicsDriver\Graphics\iigd_dch.inf /install
 pnputil.exe /i /a .\IVSHMEM\ivshmem.inf
 devcon.exe install .\DVServer\DVServer.inf Root\DVServer
 echo Done driver installations...
