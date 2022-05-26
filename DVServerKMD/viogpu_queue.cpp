@@ -523,16 +523,13 @@ void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, K
     KeInitializeEvent(event, NotificationEvent, FALSE);
     vbuf->event = event;
 
-    LARGE_INTEGER timeout = { 0 };
-    timeout.QuadPart = Int32x32To64(1000, -10000);
-
     QueueBuffer(vbuf);
 
     status = KeWaitForSingleObject(event,
         Executive,
         KernelMode,
         FALSE,
-        &timeout);
+        NULL);
 
     if (status == STATUS_TIMEOUT) {
         DbgPrintAdopt(TRACE_LEVEL_FATAL, ("---> Failed to ask display info\n"));
