@@ -1,0 +1,11 @@
+/*===========================================================================
+; DVServerUMD_Version.txt
+;----------------------------------------------------------------------------
+; * Copyright © 2021 Intel Corporation
+; SPDX-License-Identifier: MS-PL
+;
+; File Description:
+;   This file will have the DVServerUMD version 
+;--------------------------------------------------------------------------*/
+
+DVServerUMD_Version = 3.2.3

@@ -1,0 +1,88 @@
+;
+; DVServerKMD.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider=%ManufacturerName%
+CatalogFile=DVServerKMD.cat
+DriverVer= 
+PnpLockdown=1
+
+[DestinationDirs]
+DefaultDestDir = 12
+DVServerKMD_Device_CoInstaller_CopyFiles = 11
+
+; ================= Class section =====================
+
+#[ClassInstall32]
+Addreg=SystemClassReg
+
+[SystemClassReg]
+HKR,,,0,%ClassName%
+HKR,,Icon,,-5
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+DVServerKMD.sys  = 1,,
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NT$ARCH$
+
+[Standard.NT$ARCH$]
+%DVServerKMD.DeviceDesc%=DVServerKMD_Device, PCI\VEN_1AF4&DEV_1050&CC_030000
+
+[DVServerKMD_Device.NT]
+CopyFiles=Drivers_Dir
+FeatureScore=01
+
+[Drivers_Dir]
+DVServerKMD.sys
+
+;-------------- Service installation
+[DVServerKMD_Device.NT.Services]
+AddService = DVServerKMD,%SPSVCINST_ASSOCSERVICE%, DVServerKMD_Service_Inst
+
+; -------------- DVServerKMD driver install sections
+[DVServerKMD_Service_Inst]
+DisplayName    = %DVServerKMD.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\DVServerKMD.sys
+
+;
+;--- DVServerKMD_Device Coinstaller installation ------
+;
+
+[DVServerKMD_Device.NT.CoInstallers]
+AddReg=DVServerKMD_Device_CoInstaller_AddReg
+CopyFiles=DVServerKMD_Device_CoInstaller_CopyFiles
+
+[DVServerKMD_Device_CoInstaller_AddReg]
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
+
+[DVServerKMD_Device_CoInstaller_CopyFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
+
+[DVServerKMD_Device.NT.Wdf]
+KmdfService =  DVServerKMD, DVServerKMD_wdfsect
+[DVServerKMD_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="Intel"
+ClassName="System"
+DiskName = "DVServerKMD Installation Disk"
+DVServerKMD.DeviceDesc = "DVServerKMD Device"
+DVServerKMD.SVCDESC = "DVServerKMD Service"
