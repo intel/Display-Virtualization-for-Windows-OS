@@ -37,6 +37,7 @@
   <ItemGroup>
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="DVServeredid.cpp" />
+    <ClCompile Include="DVServerregistry.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\Common\debug.h" />

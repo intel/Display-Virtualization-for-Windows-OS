@@ -1,7 +1,7 @@
 /*===========================================================================
 ; DVServercommon.h
 ;----------------------------------------------------------------------------
-; * Copyright © 2021 Intel Corporation
+; Copyright (C) 2021 Intel Corporation
 ; SPDX-License-Identifier: MS-PL
 ;
 ; File Description:
@@ -15,5 +15,12 @@
 /* DVServerUMD Error Codes */
 #define DVSERVERUMD_SUCCESS		0
 #define DVSERVERUMD_FAILURE		-1
+#define MAX_REG_NAME_LENGTH		32
+#define EDID_SIZE				256
+
+static NTSTATUS open_dvserver_registry(WDFKEY * key);
+static void close_dvserver_registry(WDFKEY key);
+int write_dvserver_registry_binary(PCWSTR name, BYTE * buffer, ULONG size);
+int read_dvserver_registry_binary(PCWSTR name, BYTE * buffer, ULONG * size);
 
 #endif /* __DVSERVER_COMMON_H__ */

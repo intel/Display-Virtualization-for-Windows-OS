@@ -1,5 +1,5 @@
-/*
- * Copyright © 2021 Intel Corporation 
+ï»¿/*
+ * Copyright (C) 2021 Intel Corporation
  * Copyright (C) 2019-2020 Red Hat, Inc.
  *
  * Written By: Vadim Rozenfeld <vrozenfe@redhat.com>
@@ -30,7 +30,13 @@
 
 #pragma once
 
+#include "edid.h"
+#include "viogpu.h"
 #include "helper.h"
+
+extern "C" {
+#include "..\EDIDParser\edidshared.h"
+}
 #pragma pack(push)
 #pragma pack(1)
 
@@ -72,6 +78,36 @@ typedef struct _CURRENT_MODE
     } FrameBuffer;
 } CURRENT_MODE;
 
+class ScreenInfo {
+public:
+    PVIDEO_MODE_INFORMATION m_ModeInfo;
+    ULONG m_ModeCount;
+    PUSHORT m_ModeNumbers;
+    USHORT m_CurrentMode;
+    USHORT m_CustomMode;
+    BYTE m_EDIDs[EDID_V1_BLOCK_SIZE];
+    GPU_DISP_MODE_EXT gpu_disp_mode_ext[MAX_MODELIST_SIZE];
+    output_modelist mode_list;
+    KEVENT m_DisplayInfoEvent;
+    KEVENT m_EdidEvent;
+    KEVENT m_FlushEvent;
+    VioGpuMemSegment m_FrameSegment;
+    VioGpuObj* m_pFrameBuf;
+    BOOL m_FlushCount;
+
+public:
+    ScreenInfo();
+    ~ScreenInfo();
+    PVIDEO_MODE_INFORMATION GetModeInfo(UINT idx) { return &m_ModeInfo[idx]; }
+    ULONG GetModeCount(void) { return m_ModeCount; }
+    USHORT GetModeNumber(USHORT idx) { return m_ModeNumbers[idx]; }
+    USHORT GetCurrentModeIndex(void) { return m_CurrentMode; }
+    void SetCurrentModeIndex(USHORT idx) { m_CurrentMode = idx; }
+    void SetCustomDisplay(_In_ USHORT xres, _In_ USHORT yres);
+    void SetVideoModeInfo(UINT Idx, PGPU_DISP_MODE_EXT pModeInfo);
+    void Reset();
+};
+
 class IVioGpuAdapterLite {
 public:
     IVioGpuAdapterLite(_In_ PVOID pvDevcieContext) { m_pvDeviceContext = pvDevcieContext; m_bEDID = FALSE; }
@@ -82,12 +118,6 @@ public:
     virtual BOOLEAN InterruptRoutine(_In_  ULONG MessageNumber) = 0;
     virtual VOID DpcRoutine(void) = 0;
     virtual VOID ResetDevice(void) = 0;
-
-    virtual ULONG GetModeCount(void) = 0;
-    PVIDEO_MODE_INFORMATION GetModeInfo(UINT idx) { return &m_ModeInfo[idx]; }
-    USHORT GetModeNumber(USHORT idx) { return m_ModeNumbers[idx]; }
-    USHORT GetCurrentModeIndex(void) { return m_CurrentMode; }
-    VOID SetCurrentModeIndex(USHORT idx) { m_CurrentMode = idx; }
     virtual VOID BlackOutScreen(CURRENT_MODE* pCurrentMod) = 0;
     virtual NTSTATUS SetPointerShape(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pModeCur) = 0;
     virtual NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition, _In_ CONST CURRENT_MODE* pModeCur) = 0;
@@ -98,13 +128,8 @@ public:
 protected:
     virtual NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo) = 0;
 protected:
-    PVIDEO_MODE_INFORMATION m_ModeInfo;
-    ULONG m_ModeCount;
-    PUSHORT m_ModeNumbers;
-    USHORT m_CurrentMode;
-    USHORT m_CustomMode;
     ULONG  m_Id;
-    BYTE m_EDIDs[MAX_CHILDREN][EDID_V1_BLOCK_SIZE];
+    ScreenInfo m_screen[MAX_SCAN_OUT];
     BOOLEAN m_bEDID;
 public:
     PVOID m_pvDeviceContext;
@@ -117,7 +142,6 @@ public:
     VioGpuAdapterLite(_In_ PVOID pvDeviceContext);
     ~VioGpuAdapterLite(void);
     NTSTATUS SetCurrentModeExt(CURRENT_MODE* pCurrentMode);
-    ULONG GetModeCount(void) { return m_ModeCount; }
     NTSTATUS SetPowerState(DEVICE_POWER_STATE DevicePowerState);
     NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION* pDispInfo);
     NTSTATUS HWClose(void);
@@ -125,7 +149,8 @@ public:
         _In_ UINT               SrcBytesPerPixel,
         _In_ LONG               SrcPitch,
         _In_ UINT               SrcWidth,
-        _In_ UINT               SrcHeight);
+        _In_ UINT               SrcHeight,
+        _In_ UINT               ScreenNum);
     VOID BlackOutScreen(CURRENT_MODE* pCurrentMod);
     BOOLEAN InterruptRoutine(_In_  ULONG MessageNumber);
     VOID DpcRoutine(void);
@@ -140,6 +165,11 @@ public:
     {
         return m_Flags.HardwareInit;
     }
+    UINT32 GetNumScreens() { return m_u32NumScanouts; }
+    UINT32 GetModeListSize(UINT32 screen_num) { return m_screen[screen_num].mode_list.modelist_size;  }
+    VOID CopyResolution(UINT32 screen_num, struct edid_info* edata);
+    PVOID GetFbVAddr(UINT32 screen_num) { return m_screen[screen_num].m_FrameSegment.GetFbVAddr(); }
+    VOID Close(UINT32 screen_num) { m_screen[screen_num].m_FrameSegment.Close(); }
 private:
 
     void SetHardwareInit(BOOLEAN init)
@@ -149,21 +179,18 @@ private:
 
 protected:
 private:
-    NTSTATUS VioGpuAdapterLiteInit(DXGK_DISPLAY_INFORMATION* pDispInfo);
-    void SetVideoModeInfo(UINT Idx, PGPU_DISP_MODE_EXT pModeInfo);
+    NTSTATUS VioGpuAdapterLiteInit();
     void VioGpuAdapterLiteClose(void);
     NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo);
     BOOLEAN AckFeature(UINT64 Feature);
-    BOOLEAN GetDisplayInfo(void);
-    void ProcessEdid(void);
-    BOOLEAN GetEdids(void);
-    void AddEdidModes(void);
+    BOOLEAN GetDisplayInfo(UINT32 screen_num);
+    void ProcessEdid(UINT32 screen_num);
+    BOOLEAN GetEdids(UINT32 screen_num);
+    void AddEdidModes(UINT32 screen_num);
     // Not needed by the DVServerKMD
     //NTSTATUS UpdateChildStatus(BOOLEAN connect);
-    void SetCustomDisplay(_In_ USHORT xres,
-        _In_ USHORT yres);
     void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE* pCurrentMode);
-    void DestroyFrameBufferObj(BOOLEAN bReset);
+    void DestroyFrameBufferObj(UINT32 screen_num, BOOLEAN bReset);
     BOOLEAN CreateCursor(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pCurrentMode);
     void DestroyCursor(void);
     BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height);
@@ -184,20 +211,16 @@ private:
     CrsrQueue m_CursorQueue;
     VioGpuBuf m_GpuBuf;
     VioGpuIdr m_Idr;
-    VioGpuObj* m_pFrameBuf;
     VioGpuObj* m_pCursorBuf;
     VioGpuMemSegment m_CursorSegment;
     volatile ULONG m_PendingWorks;
     KEVENT m_ConfigUpdateEvent;
-    KEVENT m_DisplayInfoEvent;
-    KEVENT m_EdidEvent;
-    KEVENT m_FlushEvent;
+
     PETHREAD m_pWorkThread;
     BOOLEAN m_bStopWorkThread;
     CURRENT_MODE m_CurrentModeInfo;
     BOOLEAN m_bBlobSupported;
 public:
-	VioGpuMemSegment m_FrameSegment;
 	PBYTE GetEdidData(UINT Idx);
 };
 

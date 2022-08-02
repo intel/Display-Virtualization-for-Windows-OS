@@ -1,7 +1,7 @@
 /*===========================================================================
 ; Main.cpp
 ;----------------------------------------------------------------------------
-; * Copyright © 2021 Intel Corporation
+; Copyright (C) 2021 Intel Corporation
 ; SPDX-License-Identifier: MS-PL
 ;
 ; File Description:

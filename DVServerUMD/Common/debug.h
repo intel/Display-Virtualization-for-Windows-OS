@@ -1,3 +1,12 @@
+/*===========================================================================
+; debug.h
+;----------------------------------------------------------------------------
+; Copyright (C) 2021 Intel Corporation
+; SPDX-License-Identifier: MS-PL
+;
+; File Description:
+;   This file declares and defines the devserverumd logging macros
+;--------------------------------------------------------------------------*/
 #ifndef _DEBUG_H
 #define _DEBUG_H
 
@@ -32,6 +41,7 @@ static char module_name[80] = { '\0' };
 		sprintf_s(temp_str456, fmt, ##__VA_ARGS__); \
 		sprintf_s(temp_str789, "%s%s", temp_str123, temp_str456); \
 		OutputDebugStringA(temp_str789); \
+		fflush(stdout); \
 	}
 
 #define _PRINT(prefix, fmt, ...)  \
@@ -41,6 +51,7 @@ static char module_name[80] = { '\0' };
 		sprintf_s(temp_str456, fmt, ##__VA_ARGS__); \
 		sprintf_s(temp_str789, "%s%s", temp_str123, temp_str456); \
 		OutputDebugStringA(temp_str789); \
+		fflush(stdout); \
 	}
 
 #define PRINT(fmt, ...)    _PRINT("", fmt, ##__VA_ARGS__)

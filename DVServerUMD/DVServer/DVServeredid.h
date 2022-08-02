@@ -1,7 +1,7 @@
 /*===========================================================================
 ; DVServeredid.h
 ;----------------------------------------------------------------------------
-; * Copyright © 2021 Intel Corporation
+; Copyright (C) 2021 Intel Corporation
 ; SPDX-License-Identifier: MS-PL
 ;
 ; File Description:
@@ -28,8 +28,8 @@
 #define REFRESH_RATE_60     60   //60Hz
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
 
-int get_dvserver_edid_kmdf_device(void);
-int get_edid_data(void);
+int get_total_screens(HANDLE devHandle);
+int get_edid_data(HANDLE devHandle, void *m, DWORD id);
 int is_blacklist(unsigned int width, unsigned int height);
 
 #endif /* __DVSERVER_EDID_H__ */

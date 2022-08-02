@@ -1,6 +1,6 @@
 /*++
 * 
-* Copyright © 2021 Intel Corporation
+* Copyright (C) 2021 Intel Corporation
 * SPDX-License-Identifier: MS-PL
 
 Module Name:
@@ -31,9 +31,6 @@ extern "C" {
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, DVServerKMDQueueInitialize)
 #endif
-
-extern GPU_DISP_MODE_EXT gpu_disp_mode_ext[MAX_MODELIST_SIZE];
-extern output_modelist mode_list;
 
 NTSTATUS
 DVServerKMDQueueInitialize(
@@ -154,8 +151,10 @@ Return Value:
 		// method retrieves an I/O request's input buffer.
 		// https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdfrequest/nf-wdfrequest-wdfrequestretrieveinputbuffer
 		status = IoctlRequestPresentFb(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
-		if (status != STATUS_SUCCESS)
+		if (status != STATUS_SUCCESS) {
+			ERR("IoctlRequestPresentFb failed with status = %d\n", status);
 			return;
+		}
 		status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&resp, &bufSize);
 		if (!NT_SUCCESS(status)) {
 			ERR("Couldn't retrieve Output buffer\n");
@@ -231,6 +230,11 @@ Return Value:
 		//Return value from the KMDF DVServer
 		resp->retval = DVSERVERKMD_SUCCESS;
 		WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
+		break;
+	case IOCTL_DVSERVER_GET_TOTAL_SCREENS:
+		status = IoctlRequestTotalScreens(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
+		if (status != STATUS_SUCCESS)
+			return;
 		break;
 	}
 
@@ -341,29 +345,40 @@ static NTSTATUS IoctlRequestSetMode(
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
+	if (ptr->screen_num >= MAX_SCAN_OUT) {
+		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
+			ptr->screen_num, MAX_SCAN_OUT);
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return status;
+	}
+
 	CURRENT_MODE tempCurrentMode = { 0 };
 	tempCurrentMode.DispInfo.Width = ptr->width;
 	tempCurrentMode.DispInfo.Height = ptr->height;
 	tempCurrentMode.DispInfo.Pitch = ptr->pitch;
+	tempCurrentMode.DispInfo.TargetId = ptr->screen_num;
 	tempCurrentMode.DispInfo.ColorFormat = (D3DDDIFORMAT) ptr->format;
 	tempCurrentMode.FrameBuffer.Ptr = (BYTE*)ptr->addr;
 	
 	status = pAdapter->SetCurrentModeExt(&tempCurrentMode);
-	if (status != STATUS_SUCCESS)
+	if (status != STATUS_SUCCESS) {
+		ERR("SetCurrentModeExt failed with status = %d\n", status);
 		return STATUS_UNSUCCESSFUL;
+	}
 
 	// BlackOutScreen
 	CURRENT_MODE CurrentMode = { 0 };
 	CurrentMode.DispInfo.Width = ptr->width;
 	CurrentMode.DispInfo.Height = ptr->height;
 	CurrentMode.DispInfo.Pitch = ptr->pitch;
-	CurrentMode.FrameBuffer.Ptr = pAdapter->m_FrameSegment.GetFbVAddr();
+	CurrentMode.DispInfo.TargetId = ptr->screen_num;
+	CurrentMode.FrameBuffer.Ptr = pAdapter->GetFbVAddr(ptr->screen_num);
 	CurrentMode.Flags.FrameBufferIsActive = 1;
 
 	pAdapter->BlackOutScreen(&CurrentMode);
 
 	if (tempCurrentMode.FrameBuffer.Ptr) {
-		pAdapter->m_FrameSegment.Close();
+		pAdapter->Close(ptr->screen_num);
 	}
 
 	return STATUS_SUCCESS;
@@ -387,7 +402,7 @@ static NTSTATUS IoctlRequestPresentFb(
 		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
 
 	if (!pAdapter) {
-		ERR("Coudlnt' find adapter\n");
+		ERR("Couldnt' find adapter\n");
 		return status;
 	}
 
@@ -398,15 +413,24 @@ static NTSTATUS IoctlRequestPresentFb(
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
+	if (ptr->screen_num >= MAX_SCAN_OUT) {
+		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
+			ptr->screen_num, MAX_SCAN_OUT);
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return status;
+	}
 	status = pAdapter->ExecutePresentDisplayZeroCopy(
 		(BYTE*)ptr->addr,
 		ptr->bitrate,
 		ptr->pitch,
 		ptr->width,
-		ptr->height);
+		ptr->height,
+		ptr->screen_num);
 
-	if (status != STATUS_SUCCESS)
+	if (status != STATUS_SUCCESS) {
+		ERR("ExecutePresentDisplayZeroCopy failed with status = %d\n", status);
 		return STATUS_UNSUCCESSFUL;
+	}
 
 	return STATUS_SUCCESS;
 }
@@ -446,6 +470,14 @@ static NTSTATUS IoctlRequestEdid(
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
 		return status;
 	}
+
+	if (edata->screen_num >= MAX_SCAN_OUT) {
+		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
+			edata->screen_num, MAX_SCAN_OUT);
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return status;
+	}
+
 	if (edata->mode_size == 0) {
 		status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&edata, &bufSize);
 		if (!NT_SUCCESS(status)) {
@@ -453,14 +485,15 @@ static NTSTATUS IoctlRequestEdid(
 			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
 			return status;
 		}
+
 		//Return value from the KMDF DVServer
-		if (mode_list.modelist_size != 0) {
-			edata->mode_size = mode_list.modelist_size;
+		if(pAdapter->GetModeListSize(edata->screen_num) != 0) {
+			edata->mode_size = pAdapter->GetModeListSize(edata->screen_num);
 		} else {
 			edata->mode_size = QEMU_MODELIST_SIZE;
 		}
 		WdfRequestSetInformation(Request, sizeof(struct edid_info));
-	} else if ((edata->mode_size == mode_list.modelist_size) || (edata->mode_size == QEMU_MODELIST_SIZE)) {
+	} else if ((edata->mode_size == pAdapter->GetModeListSize(edata->screen_num)) || (edata->mode_size == QEMU_MODELIST_SIZE)) {
 		status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&edata, &bufSize);
 		if (!NT_SUCCESS(status)) {
 			ERR("Couldn't retrieve Output buffer\n");
@@ -468,14 +501,47 @@ static NTSTATUS IoctlRequestEdid(
 			return status;
 		}
 		//Return value from the KMDF DVServer
-		RtlCopyMemory(edata->edid_data, pAdapter->GetEdidData(0), EDID_V1_BLOCK_SIZE);
+		RtlCopyMemory(edata->edid_data, pAdapter->GetEdidData(edata->screen_num), EDID_V1_BLOCK_SIZE);
 
-		for (unsigned int i = 0; i < edata->mode_size; i++) {
-			edata->mode_list[i].width = gpu_disp_mode_ext[i].XResolution;
-			edata->mode_list[i].height = gpu_disp_mode_ext[i].YResolution;
-			edata->mode_list[i].refreshrate = gpu_disp_mode_ext[i].refresh;
-		}
+		pAdapter->CopyResolution(edata->screen_num, edata);
 		WdfRequestSetInformation(Request, sizeof(struct edid_info));
 	}
+	return STATUS_SUCCESS;
+}
+
+static NTSTATUS IoctlRequestTotalScreens(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const size_t          OutputBufferLength,
+	const WDFREQUEST      Request,
+	size_t* BytesReturned)
+{
+	UNREFERENCED_PARAMETER(DeviceContext);
+	UNREFERENCED_PARAMETER(InputBufferLength);
+	UNREFERENCED_PARAMETER(OutputBufferLength);
+	UNREFERENCED_PARAMETER(BytesReturned);
+
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	struct screen_info* mdata = NULL;
+	size_t bufSize;
+
+	VioGpuAdapterLite* pAdapter =
+		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
+
+	if (!pAdapter) {
+		ERR("Coudlnt' find adapter\n");
+		return status;
+	}
+
+	status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&mdata, &bufSize);
+	if (!NT_SUCCESS(status)) {
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return status;
+
+	}
+
+	mdata->total_screens = pAdapter->GetNumScreens();
+	WdfRequestSetInformation(Request, sizeof(struct screen_info));
+
 	return STATUS_SUCCESS;
 }

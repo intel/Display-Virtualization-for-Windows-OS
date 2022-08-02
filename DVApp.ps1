@@ -1,7 +1,7 @@
 #===========================================================================
 #DVApp.ps1
 #----------------------------------------------------------------------------
-#* Copyright © 2021 Intel Corporation
+#Copyright (C) 2021 Intel Corporation
 #SPDX-License-Identifier: MIT
 #--------------------------------------------------------------------------*/
 
@@ -57,7 +57,12 @@ function create_node()
 	Write-Host "Turning off MSFT Path"
 
 	& ".\DVEnabler.exe"
-	return "SUCCESS"
+	if ($LASTEXITCODE -eq 0) {
+		return "SUCCESS"
+	} else {
+		Write-Host "DVEnabler failed. DVServerUMD has not taken over MSBDA!"
+		return "FAIL"
+	}
 }
 
 #This API will execute the setup/run commands

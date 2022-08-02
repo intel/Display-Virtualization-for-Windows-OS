@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 Intel Corporation
+ * Copyright (C) 2021 Intel Corporation
  * Copyright (C) 2019-2020 Red Hat, Inc.
  *
  * Written By: Vadim Rozenfeld <vrozenfe@redhat.com>
@@ -88,7 +88,6 @@ _IRQL_raises_(DISPATCH_LEVEL)
 void VioGpuQueue::Lock(KIRQL* Irql)
 {
     KIRQL SavedIrql = KeGetCurrentIrql();
-    TRACING();
 
     if (SavedIrql < DISPATCH_LEVEL) {
         KeAcquireSpinLock(&m_SpinLock, &SavedIrql);
@@ -104,8 +103,6 @@ void VioGpuQueue::Lock(KIRQL* Irql)
 
 void VioGpuQueue::Unlock(KIRQL SavedIrql)
 {
-    TRACING();
-
     if (SavedIrql < DISPATCH_LEVEL) {
         KeReleaseSpinLock(&m_SpinLock, SavedIrql);
     }
@@ -211,7 +208,7 @@ BOOLEAN CtrlQueue::AskDisplayInfo(PGPU_VBUFFER* buf, KEVENT* event)
 
     if (!resp_buf)
     {
-        ERR("Failed to allocate %d bytes\n", sizeof(GPU_RESP_DISP_INFO));
+        ERR("Failed to allocate %d bytes\n", (int) sizeof(GPU_RESP_DISP_INFO));
         return FALSE;
     }
 
@@ -226,6 +223,7 @@ BOOLEAN CtrlQueue::AskDisplayInfo(PGPU_VBUFFER* buf, KEVENT* event)
     LARGE_INTEGER timeout = { 0 };
     timeout.QuadPart = Int32x32To64(1000, -10000);
 
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->type);
     QueueBuffer(vbuf);
     status = KeWaitForSingleObject(event,
         Executive,
@@ -258,7 +256,7 @@ BOOLEAN CtrlQueue::AskEdidInfo(PGPU_VBUFFER* buf, UINT id, KEVENT* event)
 
     if (!resp_buf)
     {
-        ERR("Failed to allocate %d bytes\n", sizeof(GPU_RESP_EDID));
+        ERR("Failed to allocate %d bytes\n", (int) sizeof(GPU_RESP_EDID));
         return FALSE;
     }
     cmd = (PGPU_CMD_GET_EDID)AllocCmdResp(&vbuf, sizeof(GPU_CMD_GET_EDID), resp_buf, sizeof(GPU_RESP_EDID));
@@ -273,6 +271,7 @@ BOOLEAN CtrlQueue::AskEdidInfo(PGPU_VBUFFER* buf, UINT id, KEVENT* event)
     LARGE_INTEGER timeout = { 0 };
     timeout.QuadPart = Int32x32To64(1000, -10000);
 
+    DBGPRINT("QueueBuffer, type = %d, screen = %d\n", cmd->hdr.type, cmd->scanout);
     QueueBuffer(vbuf);
 
     status = KeWaitForSingleObject(event,
@@ -312,8 +311,7 @@ BOOLEAN CtrlQueue::GetEdidInfo(PGPU_VBUFFER buf, UINT id, PBYTE edid)
         return FALSE;
     }
 
-    PUCHAR resp_edit = resp->edid + (id * EDID_V1_BLOCK_SIZE);
-    RtlCopyMemory(edid, resp_edit, EDID_V1_BLOCK_SIZE);
+    RtlCopyMemory(edid, resp->edid, EDID_V1_BLOCK_SIZE);
     return TRUE;
 }
 
@@ -325,6 +323,10 @@ void CtrlQueue::CreateResource(UINT res_id, UINT format, UINT width, UINT height
     PGPU_RES_CREATE_2D cmd;
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_RES_CREATE_2D)AllocCmd(&vbuf, sizeof(*cmd));
+    if (!cmd) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+        return;
+    }
     RtlZeroMemory(cmd, sizeof(*cmd));
 
     cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_CREATE_2D;
@@ -334,6 +336,7 @@ void CtrlQueue::CreateResource(UINT res_id, UINT format, UINT width, UINT height
     cmd->height = height;
 
 //FIXME!!! if 
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->hdr.type);
     QueueBuffer(vbuf);
 }
 
@@ -346,6 +349,7 @@ void CtrlQueue::CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents,
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_RES_CREATE_BLOB)AllocCmd(&vbuf, sizeof(*cmd));
     if ((vbuf == NULL)||(cmd == NULL)) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
         return;
     }
     RtlZeroMemory(cmd, sizeof(*cmd));
@@ -363,6 +367,7 @@ void CtrlQueue::CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents,
     vbuf->data_size = sizeof(*ents) * nents;
 
     //FIXME!!! if
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->hdr.type);
     QueueBuffer(vbuf);
 }
 
@@ -375,11 +380,17 @@ void CtrlQueue::UnrefResource(UINT res_id)
     PGPU_RES_UNREF cmd;
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_RES_UNREF)AllocCmd(&vbuf, sizeof(*cmd));
+    if (!cmd) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+        return;
+    }
+
     RtlZeroMemory(cmd, sizeof(*cmd));
 
     cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_UNREF;
     cmd->resource_id = res_id;
 
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->hdr.type);
     QueueBuffer(vbuf);
 }
 
@@ -396,6 +407,7 @@ void CtrlQueue::InvalBacking(UINT res_id)
     cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING;
     cmd->resource_id = res_id;
 
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->hdr.type);
     QueueBuffer(vbuf);
 }
 
@@ -407,6 +419,10 @@ void CtrlQueue::SetScanout(UINT scan_id, UINT res_id, UINT width, UINT height, U
     PGPU_SET_SCANOUT cmd;
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_SET_SCANOUT)AllocCmd(&vbuf, sizeof(*cmd));
+    if (!cmd) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+        return;
+    }
     RtlZeroMemory(cmd, sizeof(*cmd));
 
     cmd->hdr.type = VIRTIO_GPU_CMD_SET_SCANOUT;
@@ -418,6 +434,7 @@ void CtrlQueue::SetScanout(UINT scan_id, UINT res_id, UINT width, UINT height, U
     cmd->r.y = y;
 
     //FIXME if 
+    DBGPRINT("QueueBuffer, type = %d, screen = %d\n", cmd->hdr.type, scan_id);
     QueueBuffer(vbuf);
 }
 
@@ -430,6 +447,7 @@ void CtrlQueue::SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT heigh
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_SET_SCANOUT_BLOB)AllocCmd(&vbuf, sizeof(*cmd));
     if ((vbuf == NULL)||(cmd == NULL)) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
         return;
     }
     RtlZeroMemory(cmd, sizeof(*cmd));
@@ -453,10 +471,11 @@ void CtrlQueue::SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT heigh
     cmd->r.y = y;
 
     //FIXME if
+    DBGPRINT("QueueBuffer, type = %d, screen = %d\n", cmd->hdr.type, scan_id);
     QueueBuffer(vbuf);
 }
 
-void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, KEVENT* event)
+void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, UINT screen_num, KEVENT* event)
 {
     NTSTATUS status;
 
@@ -466,9 +485,14 @@ void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, K
     PGPU_RES_FLUSH cmd;
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_RES_FLUSH)AllocCmd(&vbuf, sizeof(*cmd));
+    if (!cmd) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+        return;
+    }
     RtlZeroMemory(cmd, sizeof(*cmd));
 
     cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_FLUSH;
+    cmd->hdr.fence_id = screen_num;
     cmd->resource_id = res_id;
     cmd->r.width = width;
     cmd->r.height = height;
@@ -482,16 +506,20 @@ void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, K
     KeInitializeEvent(event, NotificationEvent, FALSE);
     vbuf->event = event;
 
+    DBGPRINT("QueueBuffer, type = %d, screen = %d\n", cmd->hdr.type, screen_num);
     QueueBuffer(vbuf);
+
+    LARGE_INTEGER timeout = { 0 };
+    timeout.QuadPart = Int32x32To64(1000, -1000);
 
     status = KeWaitForSingleObject(event,
         Executive,
         KernelMode,
         FALSE,
-        NULL);
+        &timeout);
 
     if (status == STATUS_TIMEOUT) {
-        ERR("---> Failed to ask display info\n");
+        ERR("---> Timeout waiting for Resrouce Flush\n");
         VioGpuDbgBreak();
         //        return FALSE;
     }
@@ -506,6 +534,10 @@ void CtrlQueue::TransferToHost2D(UINT res_id, ULONG offset, UINT width, UINT hei
     PGPU_RES_TRANSF_TO_HOST_2D cmd;
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_RES_TRANSF_TO_HOST_2D)AllocCmd(&vbuf, sizeof(*cmd));
+    if (!cmd) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+        return;
+    }
     RtlZeroMemory(cmd, sizeof(*cmd));
 
     cmd->hdr.type = VIRTIO_GPU_CMD_TRANSFER_TO_HOST_2D;
@@ -521,6 +553,7 @@ void CtrlQueue::TransferToHost2D(UINT res_id, ULONG offset, UINT width, UINT hei
         cmd->hdr.fence_id = *fence_id;
     }
 
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->hdr.type);
     QueueBuffer(vbuf);
 }
 
@@ -532,6 +565,10 @@ void CtrlQueue::AttachBacking(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents)
     PGPU_RES_ATTACH_BACKING cmd;
     PGPU_VBUFFER vbuf;
     cmd = (PGPU_RES_ATTACH_BACKING)AllocCmd(&vbuf, sizeof(*cmd));
+    if (!cmd) {
+        ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+        return;
+    }
     RtlZeroMemory(cmd, sizeof(*cmd));
 
     cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_ATTACH_BACKING;
@@ -541,6 +578,7 @@ void CtrlQueue::AttachBacking(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents)
     vbuf->data_buf = ents;
     vbuf->data_size = sizeof(*ents) * nents;
 
+    DBGPRINT("QueueBuffer, type = %d\n", cmd->hdr.type);
     QueueBuffer(vbuf);
 }
 

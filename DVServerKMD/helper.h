@@ -80,7 +80,6 @@ extern "C" {
 	#include <evntrace.h>
 }
 
-#define MAX_CHILDREN               4
 #define MAX_VIEWS                  1
 #define BITS_PER_BYTE              8
 

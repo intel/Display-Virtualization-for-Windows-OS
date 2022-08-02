@@ -1,14 +1,18 @@
 #===========================================================================
 #Readme.txt
 #----------------------------------------------------------------------------
-#* Copyright © 2021 Intel Corporation
+#Copyright (C) 2021 Intel Corporation
 #SPDX-License-Identifier: MIT
 #--------------------------------------------------------------------------*/
 
 -----------------------------------------------------------
 #####  Windows VM QEMU CMD Example #####
 -----------------------------------------------------------
-sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,sockets=1 -drive file=<WindowsOS.img>.img,format=qcow2,cache=none -usb -usbdevice tablet -device vfio-pci,host=0000:00:02.2 -device e1000,netdev=net0,mac=DE:AD:BE:EF:1C:00 -netdev tap,id=net0 -device virtio-vga,blob=true -display gtk,gl=on,show-fps=on -object memory-backend-memfd,id=mem1,hugetlb=on,size=4096M -machine memory-backend=mem1
+sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,sockets=1 -drive file=<WindowsOS.img>.img,format=qcow2,cache=none -device vfio-pci,host=0000:00:02.2 -device e1000,netdev=net0,mac=DE:AD:BE:EF:1C:00 -netdev tap,id=net0 -device virtio-vga,max_outputs=<no. of display, between 1-4>,blob=true -display gtk,gl=on,full-screen=<on/off>,monitor.1=0,monitor.0=1,show-fps=on -object memory-backend-memfd,id=mem1,hugetlb=on,size=4096M -machine memory-backend=mem1
+
+Note:
+full-screen=on,monitor.1=0,monitor.0=1
+Secondary display to monitor 0 & Primary display to monitor 1
 
 -----------------------------------------------------------
 ##### Common Steps #####
@@ -85,3 +89,4 @@ sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,soc
 5) Run your test cases and use cases
 6) We need to run DVServerUMD script for every reboot / shutdown --> ".\DVApp.ps1 run"
 7) If there are any changes in DVServerUMD driver, copy the updated binaries to DVServer folder  --> ".\DVApp.ps1 setup"
+
