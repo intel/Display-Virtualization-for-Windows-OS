@@ -28,6 +28,7 @@ DEFINE_GUID(GUID_DEVINTERFACE_DVSERVERKMD,
 #define DVSERVER_BBP					4  // 4 Bytes per pixel
 #define DEVINFO_FLAGS					DIGCF_PRESENT | DIGCF_ALLCLASSES | DIGCF_DEVICEINTERFACE
 #define REPORT_FRAME_STATS				60 // we need to report frame stats to OS for every 60 frames
+#define PRINT_FREQ                      3600
 
 typedef enum FrameType
 {
@@ -86,7 +87,7 @@ namespace Microsoft
                 DWORD Height;
                 DWORD VSync;
             } pModeList[szModeList];
-            const DWORD ulPreferredModeIdx;
+            DWORD ulPreferredModeIdx;
         };
 
         /// <summary>
@@ -105,16 +106,27 @@ namespace Microsoft
             Microsoft::WRL::ComPtr<ID3D11DeviceContext> DeviceContext;
         };
 
+        class DeviceInfo {
+        private:
+            PSP_DEVICE_INTERFACE_DETAIL_DATA device_iface_data;
+            HDEVINFO devinfo_handle;
+            HANDLE devHandle_frame;
+        public:
+            DeviceInfo();
+            ~DeviceInfo();
+            int get_dvserver_kmdf_device();
+            HANDLE get_Handle() { return devHandle_frame; }
+        };
+
         /// <summary>
         /// Manages a thread that consumes buffers from an indirect display swap-chain object.
         /// </summary>
         class SwapChainProcessor
         {
         public:
-            SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, std::shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent);
+            SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, std::shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent, UINT MonitorIndex);
             ~SwapChainProcessor();
 			int	 GetFrameData(std::shared_ptr<Direct3DDevice> idd_device, ID3D11Texture2D* desktopimage);
-			int get_dvserver_kmdf_device();
 			void cleanup_resources();
 			void report_frame_statistics(IDARG_OUT_RELEASEANDACQUIREBUFFER Buffer);
 			void init();
@@ -129,6 +141,7 @@ namespace Microsoft
             HANDLE m_hAvailableBufferEvent;
             Microsoft::WRL::Wrappers::Thread m_hThread;
             Microsoft::WRL::Wrappers::Event m_hTerminateEvent;
+            int m_screen_num, print_counter;
 
 			//FrameMetaData related 
 			ID3D11Texture2D* m_destimage;
@@ -179,7 +192,7 @@ namespace Microsoft
         class IndirectMonitorContext
         {
         public:
-            IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor);
+            IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, _In_ UINT ConnectorIndex);
             virtual ~IndirectMonitorContext();
 
             void AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID RenderAdapter, HANDLE NewFrameEvent);
@@ -191,7 +204,8 @@ namespace Microsoft
 
         private:
             IDDCX_MONITOR m_Monitor;
+            UINT m_MonitorIndex;
             std::unique_ptr<SwapChainProcessor> m_ProcessingThread;
-        } ;
+        };
     }
 }

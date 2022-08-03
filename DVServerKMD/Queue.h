@@ -54,6 +54,13 @@ static NTSTATUS IoctlRequestEdid(
 	const WDFREQUEST      Request,
 	size_t* BytesReturned);
 
+static NTSTATUS IoctlRequestTotalScreens(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const size_t          OutputBufferLength,
+	const WDFREQUEST      Request,
+	size_t * BytesReturned);
+
 //
 // Events from the IoQueue object
 //

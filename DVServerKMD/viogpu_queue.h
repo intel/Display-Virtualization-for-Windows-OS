@@ -1,5 +1,5 @@
 /*
- * Copyright © 2021 Intel Corporation 
+ * Copyright (C) 2021 Intel Corporation 
  * Copyright (C) 2019-2020 Red Hat, Inc.
  *
  * Written By: Vadim Rozenfeld <vrozenfe@redhat.com>
@@ -184,7 +184,7 @@ public:
     void InvalBacking(UINT id);
     void SetScanout(UINT scan_id, UINT res_id, UINT width, UINT height, UINT x, UINT y);
     void SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT height, UINT format, UINT x, UINT y);
-    void ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, KEVENT* event);
+    void ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, UINT screen_num, KEVENT* event);
     void TransferToHost2D(UINT res_id, ULONG offset, UINT width, UINT height, UINT x, UINT y, PUINT fence_id);
     void AttachBacking(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents);
     BOOLEAN GetDisplayInfo(PGPU_VBUFFER buf, UINT id, PULONG xres, PULONG yres);

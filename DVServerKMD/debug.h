@@ -1,3 +1,13 @@
+/*===========================================================================
+; debug.h
+;----------------------------------------------------------------------------
+; Copyright (C) 2021 Intel Corporation
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; File Description:
+;   This file declares and defines the devserverkmd logging macros
+;--------------------------------------------------------------------------*/
+
 #ifndef _DEBUG_H
 #define _DEBUG_H
 
