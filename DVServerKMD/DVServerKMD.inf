@@ -44,6 +44,7 @@ WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with
 [DVServerKMD_Device.NT]
 CopyFiles=Drivers_Dir
 FeatureScore=01
+CopyINF = DVServer.inf
 
 [Drivers_Dir]
 DVServerKMD.sys
@@ -60,9 +61,20 @@ StartType      = 3               ; SERVICE_DEMAND_START
 ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
 ServiceBinary  = %12%\DVServerKMD.sys
 
+[DVServerKMD_Device.NT.HW]
+AddReg = Hw_AddReg
+
+[Hw_AddReg]
+HKR,,Security,,"D:P(A;;GA;;;BA)(A;;GA;;;SY)(A;;GA;;;UD)"
+
 ;
 ;--- DVServerKMD_Device Coinstaller installation ------
 ;
+[DVServerKMD_Device.NT.Components]
+AddComponent=%ComponentName%,,component-install-section
+
+[component-install-section]
+ComponentIDs= %ComponentId%
 
 [DVServerKMD_Device.NT.CoInstallers]
 AddReg=DVServerKMD_Device_CoInstaller_AddReg
@@ -86,3 +98,5 @@ ClassName="System"
 DiskName = "DVServerKMD Installation Disk"
 DVServerKMD.DeviceDesc = "DVServerKMD Device"
 DVServerKMD.SVCDESC = "DVServerKMD Service"
+ComponentName = "DVServer"
+ComponentId = "DVServer"

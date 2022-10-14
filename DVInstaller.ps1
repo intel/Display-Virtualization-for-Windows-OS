@@ -5,12 +5,52 @@
 #SPDX-License-Identifier: MIT
 #--------------------------------------------------------------------------*/
 
-Write-Host "Start Windows GFX installation..."
-pnputil.exe /add-driver .\GraphicsDriver\Graphics\iigd_dch.inf /install
+#check if file present
+function is_present($filepath)
+{
+	$isavailable = Test-Path $filepath
+	return $isavailable
+}
 
-Write-Host "Start DVServerKMD installation..."
-pnputil.exe /add-driver .\DVServerKMD\DVServerKMD.inf /install
+#check if all the required binaries are present or not
+function check_executables()
+{
+	if ((is_present("DVServer\dvserver.cat") -eq $true) -and
+		(is_present("DVServer\DVServer.dll") -eq $true) -and
+		(is_present("DVServer\DVServer.inf") -eq $true) -and
+		(is_present("DVServer\dvserverkmd.cat") -eq $true) -and
+		(is_present("DVServer\DVServerKMD.inf") -eq $true) -and
+		(is_present("DVServer\DVServerKMD.sys") -eq $true) -and
+		(is_present("DVEnabler.exe") -eq $true) -and
+        (is_present("GraphicsDriver\Graphics\iigd_dch.inf") -eq $true)){
+            Write-Host "Setup files present"
+			return "SUCCESS"
+	}
+	Write-Host "Setup files don't exist.. Exiting.."
+	return "FAIL"
+}
 
-Write-Host "Rebooting Windows VM in 10 secs..."
-Timeout /T 10
-Restart-Computer
+##Main##
+$ret = check_executables
+if ($ret -eq "FAIL") {
+	Exit
+}
+else {
+	Write-Host "Start Windows GFX Driver installation..."
+	pnputil.exe /add-driver .\GraphicsDriver\Graphics\iigd_dch.inf /install
+
+	Write-Host "Start Zerocopy Driver installation..."
+	pnputil.exe /add-driver .\DVServer\DVServerKMD.inf /install
+
+	Timeout /T 10
+	Write-Host "Running DVEnabler..."
+	& ".\DVEnabler.exe"
+	if ($LASTEXITCODE -eq 0) {
+		Write-Host "DVEnabler Success. DVServerUMD has taken over MSBDA!"
+	} else {
+		Write-Host "DVEnabler failed. DVServerUMD has not taken over MSBDA!"
+	}
+
+	Write-Host "Rebooting Windows VM..."
+	Restart-Computer
+}
