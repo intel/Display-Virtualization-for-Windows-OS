@@ -15,78 +15,41 @@ full-screen=on,monitor.1=0,monitor.0=1
 Secondary display to monitor 0 & Primary display to monitor 1
 
 -----------------------------------------------------------
-##### Common Steps #####
+##### Pre-requisites #####
 -----------------------------------------------------------
 1) Use the above QEMU cmd and boot to Windows VM
-2) Copy the Zero Copy Binaries and Windows GFX driver to the VM
+2) Copy the Signed Zero Copy Binaries and Windows GFX driver to the VM
 
 -----------------------------------------------------------
-#####  Using "Signed" 0Copy Binaries (DVServerKMD)  #####
+#####  Configuring 0Copy  #####
 -----------------------------------------------------------
-1) Run these commands
-	1.1) Open Powershell / CMD prompt in admin mode and run the below command
-		>powershell Set-ExecutionPolicy RemoteSigned
-	1.2) Reboot the windows VM
-
+1) Run this command in Powershell (admin mode). DVInstaller Script will be signed, follow below step before running the DVInstaller
+		> Set-ExecutionPolicy -ExecutionPolicy AllSigned -Scope CurrentUser
+		> This will prompt user to allow access, Press “Y/Yes” to continue
 2) Create a folder with name "GraphicsDriver\Graphics" in the location where we have "DVInstaller.ps1" and extract the GFX driver zip into that folder
-3) GFX Installation and ZC DVServerKMD Installation 
-	3.1) Open powershell in admin mode and goto ZeroCopy binary folder 
-	3.2) run : ".\DVInstaller.ps1" this will install both GFX driver and DVServerKMD
-4) Reboot the Windows VM
-5) After successful reboot, check the device manager "Display Adapter --> GFX driver" and "System -->DVServerKMD driver" is loaded properly or not
+3) Make sure ZC files copied in respective folder structure -
+	3.1) DVServer\dvserverkmd.cat, DVServer\DVServerKMD.inf, DVServer\DVServerKMD.sys
+	3.2) DVServer\dvserver.cat, DVServer\DVServer.dll, DVServer\DVServer.inf
+	3.3) DVEnabler.exe
+4) GFX Installation and ZC Installation
+	4.1) Open powershell in admin mode and goto ZeroCopy binary folder
+	4.2) Run : ".\DVInstaller.ps1" - This will install both GFX driver and ZC driver
+	4.3) Auto reboot will happen
+5) After successfully rebooting, check below driver entry inside device manager. There should not be a yellow bang on any of the below drivers.
+	5.1) Display Adapter --> GFX driver
+	5.2) System -->DVServerKMD driver
+	5.3) Display Adapter -->DVServerUMD Device
+6) After subsequent reboot, ZC will be kicked in automatically (No need to run any other script for ZC)
+7) To update the Graphics/ZC drivers, Just repeat steps 2-5
 
------------------------------------------------------------
-#####  Using "Unsigned" 0Copy Binaries (DVServerKMD) #####
------------------------------------------------------------
-1) Run these commands
-	1.1) Open Powershell / CMD prompt in admin mode and run the below commands
-		> bcdedit /set testsigning on
-		> powershell Set-ExecutionPolicy RemoteSigned
-	1.2) Reboot the windows VM
-
-2) GFX Installation : Open Device Manager --> Display Adapter --> Select the "MSBDA" which is having the YellowBang (PCI ID 0.2.0) --> this is our SRIOV GFX VF device and install the GFX driver via "Have Disk" method > Choose DCH driver in the driver selection during installation
-3) After a successful installation ensure the GFX driver is loaded properly with the correct version number
-4) Zero Copy KMD Installation : Open Device Manager --> Display Adapter --> Select the other "MSBDA" which will have the PCI ID as 0.4.0 --> go to DVServerKMD folder and install this via "Have Disk" method
-5) After a successful installation an entry will be created under system device with a name "DVServerKMD Device"
-6) Reboot the Windows VM
-
------------------------------------------------------------
-#####  Configuring DVServerUMD  #####
------------------------------------------------------------
-(1) DVServerUMD : It's a user mode driver which provides indirect display. It will request DVServerKMD via IOCTL's for QEMU display edid info. Depending upon resolution set in the indrect display, the windows graphics driver will generate frame buffers. The Swapchain in the UMD driver will receive the frame buffer address from GFX driver, which will be further sent to the KMD driver for scanning out the contents on the QEMU display.
-
-(2) DVServerUMD_Node: This will create software node entry in device manager & DVServerUMD driver loads on to that software device
-
-(3) DVEnabler.exe: This will cut off Microsoft Basic Display Adpater Path; So that Intel GPU can be stiched with Indirect display and will be used for workload processing on GPU
-
-(4) Installation: 
-	(4.1)1st time installation of DVServerUMD:
-	[Pre-requisites] 
-		- DVServer\dvserver.cat, DVServer\DVServer.dll, DVServer\DVServer.inf, DVEnabler.exe and DVServerUMD_Node.exe
-		- Open Powershell in admin mode
-	[CMD] : .\DVApp.ps1 setup
-
-	(4.2) Run DVServerUMD after every reboot / shutdown:
-	[Pre-requisites] 
-		- DVEnabler.exe and DVServerUMD_Node.exe
-		- Open Powershell in admin mode
-	[CMD] : .\DVApp.ps1 run
-
-	(4.3) Subsequent installation of DVServerUMD: 
-		- If there are any changes in DVServerUMD driver, copy the updated binaries to DVServer folder
-	[Pre-requisites] 
-		- DVServer\dvserver.cat, DVServer\DVServer.dll, DVServer\DVServer.inf, DVEnabler.exe and DVServerUMD_Node.exe
-		- Open Powershell in admin mode
-	[CMD] : .\DVApp.ps1 setup
-	
------------------------------------------------------------	
-#####  Setting / Executing DVServerUMD  #####
------------------------------------------------------------
-1) Open powershell in admin mode and goto ZeroCopy binary folder 
-2) 1st time installation of DVServerUMD execute -->  ".\DVApp.ps1 setup"
-3) It will popup with the driver installation window, click install.
-4) After successful installation of UMD open Device Manager --> Display Adapter ? we should see "DVServerUMD Device"
-5) Run your test cases and use cases
-6) We need to run DVServerUMD script for every reboot / shutdown --> ".\DVApp.ps1 run"
-7) If there are any changes in DVServerUMD driver, copy the updated binaries to DVServer folder  --> ".\DVApp.ps1 setup"
-
+------------------------------------------------------------------
+#####  Installation of VIOSerial and QGA for S4 support  #####
+------------------------------------------------------------------
+1)  Download & extract “virtio-win-0.1.221.iso” from https://fedorapeople.org/groups/virt/virtio-win/direct-downloads/archive-virtio/virtio-win-0.1.221-1/virtio-win.iso
+2)  We need to install 2 components, vioserial & qemu-guest-agent
+    2.1) Open Powershell in admin mode and goto root folder of extracted ISO
+	2.2) Installing VIOSerial: pnputil.exe /add-driver .\vioserial\w10\amd64\vioser.inf /install
+	2.3) Installing qemu-guest agent: Start-Process .\guest-agent\qemu-ga-x86_64.msi
+3) After successful installtion check the componets are functioning properly or not
+	3.1) In services.msc, we need to check if QEMU Guest Agent in running state
+	3.2) Open Device Manager --> under system devices --> VirtIO Serial Driver should showup
