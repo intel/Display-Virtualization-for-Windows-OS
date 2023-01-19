@@ -15,9 +15,10 @@ Environment:
 --*/
 
 #include "driver.h"
-#include "debug.h"
 #include "baseobj.h"
 #include "viogpulite.h"
+#include "Trace.h"
+#include <Device.tmh>
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, DVServerKMDCreateDevice)
@@ -234,10 +235,13 @@ Return Value:
 --*/
 {
     NTSTATUS status = STATUS_SUCCESS;
+    PDEVICE_CONTEXT pDeviceContext;
     TRACING();
     UNREFERENCED_PARAMETER(Device);
     UNREFERENCED_PARAMETER(ResourcesTranslated);
 
+    pDeviceContext = DeviceGetContext(Device);
+    delete (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
     return status;
 }
 

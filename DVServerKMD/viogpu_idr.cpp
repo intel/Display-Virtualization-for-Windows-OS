@@ -28,8 +28,9 @@
  */
 
 #include "helper.h"
-#include "debug.h"
 #include "baseobj.h"
+#include "Trace.h"
+#include <viogpu_idr.tmh>
 #if !DBG
 #include "viogpu_idr.tmh"
 #endif

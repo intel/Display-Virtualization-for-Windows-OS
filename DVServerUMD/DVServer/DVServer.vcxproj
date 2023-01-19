@@ -38,9 +38,9 @@
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="DVServeredid.cpp" />
     <ClCompile Include="DVServerregistry.cpp" />
+    <ClCompile Include="Tracing.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="..\Common\debug.h" />
     <ClInclude Include="Driver.h" />
     <ClInclude Include="DVServercommon.h" />
     <ClInclude Include="DVServeredid.h" />
@@ -246,7 +246,7 @@
     <ClCompile>
       <WppEnabled>true</WppEnabled>
       <WppRecorderEnabled>true</WppRecorderEnabled>
-      <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
+      <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">Trace.h</WppScanConfigurationData>
       <ExceptionHandling>Async</ExceptionHandling>
       <EnablePREfast>true</EnablePREfast>
       <PreprocessorDefinitions>_WIN64;_AMD64_;AMD64;__DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>

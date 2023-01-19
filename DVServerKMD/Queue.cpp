@@ -22,8 +22,8 @@ Environment:
 #include "viogpulite.h"
 #include "Public.h"
 #include "edid.h"
-#include "debug.h"
-
+#include "Trace.h"
+#include <Queue.tmh>
 extern "C" {
 #include "..\EDIDParser\edidshared.h"
 }

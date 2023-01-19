@@ -9,7 +9,7 @@
 ;--------------------------------------------------------------------------*/
 
 #include "DVServercommon.h"
-#include "debug.h"
+#include "DVServerregistry.tmh"
 
 extern WDFDEVICE g_dvserver_device;
 

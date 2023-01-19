@@ -15,7 +15,8 @@ Environment:
 --*/
 
 #include "driver.h"
-#include "debug.h"
+#include "Trace.h"
+#include <Driver.tmh>
 extern "C" {
 #include "kdebugprint.h"
     tDebugPrintFunc VirtioDebugPrintProc;
@@ -35,7 +36,10 @@ char module_name[80] = "KMD";
 #pragma alloc_text (PAGE, DVServerKMDEvtReleaseHardware)
 #pragma alloc_text (PAGE, DVServerKMDEvtD0Entry)
 #pragma alloc_text (PAGE, DVServerKMDEvtD0Exit)
+#pragma alloc_text (PAGE, DVServerKMDEvtDriverUnload)
 #endif
+
+
 
 NTSTATUS
 DriverEntry(
@@ -71,7 +75,7 @@ Return Value:
     WDF_DRIVER_CONFIG config;
     NTSTATUS status;
     WDF_OBJECT_ATTRIBUTES attributes;
-    TRACING();
+    
     //
     // Initialize WPP Tracing
     //
@@ -81,11 +85,14 @@ Return Value:
     //
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
     attributes.EvtCleanupCallback = DVServerKMDEvtDriverContextCleanup;
+    
+    WPP_INIT_TRACING(DriverObject, RegistryPath);
+    TRACING();
 
     WDF_DRIVER_CONFIG_INIT(&config,
                            DVServerKMDEvtDeviceAdd
                            );
-
+    config.EvtDriverUnload = DVServerKMDEvtDriverUnload;
     status = WdfDriverCreate(DriverObject,
                              RegistryPath,
                              &attributes,
@@ -94,10 +101,35 @@ Return Value:
                              );
 
     if (!NT_SUCCESS(status)) {
-	    return status;
+        WPP_CLEANUP(DriverObject);
+        return status;
     }
-    
+
     return status;
+}
+
+VOID
+DVServerKMDEvtDriverUnload(
+    _In_ WDFDRIVER driver
+)
+/*++
+Routine Description:
+
+    OnDriverUnload is called by the framework when the driver unloads.
+
+Arguments:
+
+    Driver - Handle to a framework driver object created in DriverEntry.
+
+Return Value:
+
+    void
+
+--*/
+{
+    WPP_CLEANUP(WdfDriverWdmGetDriverObject(driver));
+
+    return;
 }
 
 NTSTATUS
@@ -192,4 +224,4 @@ Return Value:
 
     PAGED_CODE();
     TRACING();
- }
+}

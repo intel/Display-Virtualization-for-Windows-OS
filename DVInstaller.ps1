@@ -42,7 +42,17 @@ else {
 	Write-Host "Start Zerocopy Driver installation..."
 	pnputil.exe /add-driver .\DVServer\DVServerKMD.inf /install
 
-	Timeout /T 10
+	Write-Host "Checking DVServer loaded successfully..."
+	while($true){
+		$count= (Get-Process WUDFHost | select -ExpandProperty modules | group -Property FileName | select name | Select-String -Pattern 'dvserver.dll' -AllMatches).matches.count
+		if ($count -eq 1) {
+			break
+		}
+		else{
+			continue
+		}
+	}
+	
 	Write-Host "Running DVEnabler..."
 	& ".\DVEnabler.exe"
 	if ($LASTEXITCODE -eq 0) {

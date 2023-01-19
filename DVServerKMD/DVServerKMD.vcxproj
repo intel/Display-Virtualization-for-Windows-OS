@@ -19,6 +19,7 @@
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="Queue.cpp" />
+    <ClCompile Include="Tracing.cpp" />
     <ClCompile Include="viogpulite.cpp" />
     <ClCompile Include="viogpu_idr.cpp" />
     <ClCompile Include="viogpu_pci.cpp" />
@@ -27,7 +28,6 @@
   <ItemGroup>
     <ClInclude Include="baseobj.h" />
     <ClInclude Include="bitops.h" />
-    <ClInclude Include="debug.h" />
     <ClInclude Include="Device.h" />
     <ClInclude Include="Driver.h" />
     <ClInclude Include="edid.h" />
@@ -92,7 +92,7 @@
     <ClCompile>
       <WppEnabled>true</WppEnabled>
       <WppRecorderEnabled>true</WppRecorderEnabled>
-      <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">trace.h</WppScanConfigurationData>
+      <WppScanConfigurationData Condition="'%(ClCompile.ScanConfigurationData)' == ''">Trace.h</WppScanConfigurationData>
       <WppKernelMode>true</WppKernelMode>
       <AdditionalIncludeDirectories>C:\Program Files %28x86%29\Windows Kits\10\Include\10.0.19041.0\um;C:\Program Files %28x86%29\Windows Kits\10\Include\10.0.19041.0\km;..\VirtIO;..\EDIDParser;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>_WIN64;_AMD64_;AMD64;%(PreprocessorDefinitions);__DEBUG</PreprocessorDefinitions>
