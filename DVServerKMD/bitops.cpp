@@ -1,8 +1,7 @@
 #include "bitops.h"
-#include "debug.h"
-#if !DBG
-#include "bitops.tmh"
-#endif
+#include "Trace.h"
+#include <bitops.tmh>
+
 
 #pragma code_seg(push)
 #pragma code_seg()

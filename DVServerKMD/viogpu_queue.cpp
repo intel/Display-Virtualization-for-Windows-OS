@@ -29,11 +29,10 @@
  */
 
 #include "helper.h"
-#include "debug.h"
 #include "baseobj.h"
-#if !DBG
+#include "Trace.h"
 #include "viogpu_queue.tmh"
-#endif
+
 
 static BOOLEAN BuildSGElement(VirtIOBufferDescriptor* sg, PVOID buf, ULONG size)
 {
@@ -1067,7 +1066,7 @@ void VioGpuMemSegment::Close(void)
         if (m_bSystemMemory) {
             delete[] m_pVAddr;
         }
-        else {
+        else if(m_pVAddr) {
             UnmapFrameBuffer(m_pVAddr, (ULONG)m_Size);
             m_bMapped = FALSE;
         }
@@ -1075,8 +1074,10 @@ void VioGpuMemSegment::Close(void)
 
     m_pVAddr = NULL;
 
-    delete[] reinterpret_cast<PBYTE>(m_pSGList);
-    m_pSGList = NULL;
+    if (m_pSGList) {
+        delete[] reinterpret_cast<PBYTE>(m_pSGList);
+        m_pSGList = NULL;
+    }
 }
 
 

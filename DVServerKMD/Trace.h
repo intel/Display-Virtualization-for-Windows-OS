@@ -1,62 +1,50 @@
-/*++
+#pragma once
 
-Module Name:
+#define WPP_CONTROL_GUIDS WPP_DEFINE_CONTROL_GUID(DVserverKMDGuid, (DB7C7BAE, 6D56, 4DF0, 8807, 48F2FB30E3D1), \
+									 WPP_DEFINE_BIT(verbose) \
+									 WPP_DEFINE_BIT(information) \
+									 WPP_DEFINE_BIT(error) \
+									 WPP_DEFINE_BIT(ftrace) \
+									 WPP_DEFINE_BIT(warning))
 
-    Trace.h
-
-Abstract:
-
-    Header file for the debug tracing related function defintions and macros.
-
-Environment:
-
-    Kernel mode
-
---*/
-
-//
-// Define the tracing flags.
-//
-// Tracing GUID - a2893be8-687f-4adc-9b03-46e5114d0a1e
-//
-
-#define WPP_CONTROL_GUIDS                                              \
-    WPP_DEFINE_CONTROL_GUID(                                           \
-        DVServerKMDTraceGuid, (a2893be8,687f,4adc,9b03,46e5114d0a1e), \
-                                                                            \
-        WPP_DEFINE_BIT(MYDRIVER_ALL_INFO)                              \
-        WPP_DEFINE_BIT(TRACE_DRIVER)                                   \
-        WPP_DEFINE_BIT(TRACE_DEVICE)                                   \
-        WPP_DEFINE_BIT(TRACE_QUEUE)                                    \
-        )                             
-
-#define WPP_FLAG_LEVEL_LOGGER(flag, level)                                  \
+#define WPP_FLAG_LEVEL_LOGGER(flag, level)                             \
     WPP_LEVEL_LOGGER(flag)
 
-#define WPP_FLAG_LEVEL_ENABLED(flag, level)                                 \
-    (WPP_LEVEL_ENABLED(flag) &&                                             \
+#define WPP_FLAG_LEVEL_ENABLED(flag, level)                            \
+    (WPP_LEVEL_ENABLED(flag) &&                                        \
      WPP_CONTROL(WPP_BIT_ ## flag).Level >= level)
 
-#define WPP_LEVEL_FLAGS_LOGGER(lvl,flags) \
+#define WPP_LEVEL_FLAGS_LOGGER(lvl,flags)                              \
            WPP_LEVEL_LOGGER(flags)
-               
-#define WPP_LEVEL_FLAGS_ENABLED(lvl, flags) \
+
+#define WPP_LEVEL_FLAGS_ENABLED(lvl, flags)                            \
            (WPP_LEVEL_ENABLED(flags) && WPP_CONTROL(WPP_BIT_ ## flags).Level >= lvl)
 
-//           
-// WPP orders static parameters before dynamic parameters. To support the Trace function
-// defined below which sets FLAGS=MYDRIVER_ALL_INFO, a custom macro must be defined to
-// reorder the arguments to what the .tpl configuration file expects.
-//
-#define WPP_RECORDER_FLAGS_LEVEL_ARGS(flags, lvl) WPP_RECORDER_LEVEL_FLAGS_ARGS(lvl, flags)
-#define WPP_RECORDER_FLAGS_LEVEL_FILTER(flags, lvl) WPP_RECORDER_LEVEL_FLAGS_FILTER(lvl, flags)
+
+class tracer {
+private:
+	char* m_func_name;
+public:
+	tracer(const char* func_name);
+	~tracer();
+};
+#define TRACING() tracer trace(__FUNCTION__)
 
 //
 // This comment block is scanned by the trace preprocessor to define our
 // Trace function.
 //
 // begin_wpp config
-// FUNC Trace{FLAGS=MYDRIVER_ALL_INFO}(LEVEL, MSG, ...);
-// FUNC TraceEvents(LEVEL, FLAGS, MSG, ...);
+// FUNC ERR{LEVEL=TRACE_LEVEL_ERROR,FLAGS=error}(MSG,...);
+// FUNC WARN{LEVEL=TRACE_LEVEL_WARNING,FLAGS=warning}(MSG,...);
+// FUNC WARNING{LEVEL=TRACE_LEVEL_WARNING,FLAGS=warning}(MSG,...);
+// FUNC INFO{LEVEL=TRACE_LEVEL_INFORMATION,FLAGS=information}(MSG,...);
+// FUNC DBGPRINT{LEVEL=TRACE_LEVEL_INFORMATION,FLAGS=verbose}(MSG,...);
+// FUNC FuncTrace{LEVEL=TRACE_LEVEL_INFORMATION,FLAGS=ftrace}(MSG, ...);
+// USEPREFIX(ERR, "%!STDPREFIX! [%!FUNC!:%!LINE!] [ERR] \t");
+// USEPREFIX(WARN, "%!STDPREFIX! [%!FUNC!:%!LINE!] [WARN] \t");
+// USEPREFIX(WARNING, "%!STDPREFIX! [%!FUNC!:%!LINE!] [WARN] \t");
+// USEPREFIX(DBGPRINT, "%!STDPREFIX! [%!FUNC!:%!LINE!] [DBG] \t");
+// USEPREFIX(INFO, "%!STDPREFIX! [%!FUNC!:%!LINE!] [INFO] \t");
 // end_wpp
-//
+

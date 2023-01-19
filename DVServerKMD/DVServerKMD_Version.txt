@@ -8,4 +8,4 @@
 ;   This file will have the DVServerKMD version 
 ;--------------------------------------------------------------------------*/
 
-DVServerKMD_Version = 3.3.0
+DVServerKMD_Version = 3.4.0

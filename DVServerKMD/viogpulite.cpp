@@ -29,12 +29,13 @@
  */
 
 #include "helper.h"
-#include "debug.h"
 #include "driver.h"
 #include "viogpulite.h"
 #include "baseobj.h"
 #include "bitops.h"
 #include "qemu_edid.h"
+#include "Trace.h"
+#include <viogpulite.tmh>
 
 extern "C" {
 #include "..\EDIDParser\edidshared.h"
@@ -114,10 +115,6 @@ VioGpuAdapterLite::~VioGpuAdapterLite(void)
 {
     PAGED_CODE();
     TRACING();
-    DestroyCursor();
-    for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
-        DestroyFrameBufferObj(i, TRUE);
-    }
     VioGpuAdapterLiteClose();
     HWClose();
     m_Id = 0;
@@ -284,6 +281,12 @@ void VioGpuAdapterLite::VioGpuAdapterLiteClose()
     if (IsHardwareInit())
     {
         SetHardwareInit(FALSE);
+
+        DestroyCursor();
+        for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
+            DestroyFrameBufferObj(i, TRUE);
+        }
+
         m_CtrlQueue.DisableInterrupt();
         m_CursorQueue.DisableInterrupt();
         virtio_device_reset(&m_VioDev);
@@ -291,6 +294,8 @@ void VioGpuAdapterLite::VioGpuAdapterLiteClose()
         m_CtrlQueue.Close();
         m_CursorQueue.Close();
         virtio_device_shutdown(&m_VioDev);
+        m_CurrentModeInfo.Flags.FrameBufferIsActive = FALSE;
+        m_CurrentModeInfo.FrameBuffer.Ptr = NULL;
     }
 }
 
@@ -309,12 +314,7 @@ NTSTATUS VioGpuAdapterLite::SetPowerState(DEVICE_POWER_STATE DevicePowerState)
     case PowerDeviceD1:
     case PowerDeviceD2:
     case PowerDeviceD3: {
-        for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
-            DestroyFrameBufferObj(i, TRUE);
-        }
         VioGpuAdapterLiteClose();
-        m_CurrentModeInfo.Flags.FrameBufferIsActive = FALSE;
-        m_CurrentModeInfo.FrameBuffer.Ptr = NULL;
     } break;
     }
     return STATUS_SUCCESS;
@@ -1095,7 +1095,7 @@ VOID VioGpuAdapterLite::DpcRoutine(void)
                 case VIRTIO_GPU_CMD_RESOURCE_FLUSH:
                     if (m_screen[pcmd->fence_id].m_FlushCount > 0) {
                         m_screen[pcmd->fence_id].m_FlushCount--;
-                        DBGPRINT("Screen id = %d, m_FlushCount = %d\n", pcmd->fence_id, m_screen[pcmd->fence_id].m_FlushCount);
+                        DBGPRINT("Screen id = %lld, m_FlushCount = %d\n", pcmd->fence_id, m_screen[pcmd->fence_id].m_FlushCount);
                     } else {
                         ERR("Screen is %d, Flush Count is %d\n", (int) pcmd->fence_id,
                             m_screen[pcmd->fence_id].m_FlushCount);

@@ -24,9 +24,10 @@
  **********************************************************************/
 #include "driver.h"
 #include "helper.h"
-#include "debug.h"
 #include "viogpu.h"
 #include "viogpulite.h"
+#include "Trace.h"
+#include "viogpu_pci.tmh"
 #if !DBG
 #include "viogpu_pci.tmh"
 #endif
@@ -533,7 +534,7 @@ UnmapFrameBuffer(
     }
     else if ((VirtualAddress == NULL) || (Length == 0))
     {
-        ERR("Only one of Length (%lu), VirtualAddress (%p) is NULL or 0",
+        ERR("Only one of Length (%lu), VirtualAddress (%p) is NULL or 0\n",
             Length, VirtualAddress);
         return STATUS_INVALID_PARAMETER;
     }

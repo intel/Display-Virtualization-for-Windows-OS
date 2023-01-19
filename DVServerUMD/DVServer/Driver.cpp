@@ -16,8 +16,8 @@ Environment:
 --*/
 
 #include "Driver.h"
-#include <debug.h>
-//#include "Driver.tmh"
+#include "Trace.h"
+#include "Driver.tmh"
 #include "DVServercommon.h"
 
 #include <stdio.h>
@@ -38,6 +38,7 @@ using namespace Microsoft::WRL;
 DeviceInfo* g_DevInfo;
 UINT g_DevInfoCounter = 0;
 BOOL g_init_kmd_resources = TRUE;
+
 
 #pragma region SampleMonitors
 
@@ -118,6 +119,7 @@ extern "C" DRIVER_INITIALIZE DriverEntry;
 
 EVT_WDF_DRIVER_DEVICE_ADD IddSampleDeviceAdd;
 EVT_WDF_DEVICE_D0_ENTRY IddSampleDeviceD0Entry;
+EVT_WDF_DRIVER_UNLOAD IddDriverUnload;
 
 EVT_IDD_CX_ADAPTER_INIT_FINISHED IddSampleAdapterInitFinished;
 EVT_IDD_CX_ADAPTER_COMMIT_MODES IddSampleAdapterCommitModes;
@@ -183,7 +185,8 @@ extern "C" NTSTATUS DriverEntry(
 {
     WDF_DRIVER_CONFIG Config;
     NTSTATUS Status;
-    set_module_name("UMD");
+
+    WPP_INIT_TRACING(pDriverObject, pRegistryPath);
     TRACING();
 
     WDF_OBJECT_ATTRIBUTES Attributes;
@@ -192,16 +195,39 @@ extern "C" NTSTATUS DriverEntry(
     WDF_DRIVER_CONFIG_INIT(&Config,
         IddSampleDeviceAdd
     );
-
+    Config.EvtDriverUnload = IddDriverUnload;
     Status = WdfDriverCreate(pDriverObject, pRegistryPath, &Attributes, &Config, WDF_NO_HANDLE);
     if (!NT_SUCCESS(Status))
     {
+        WPP_CLEANUP(pDriverObject); 
         return Status;
     }
 
     return Status;
 }
 
+/*******************************************************************************
+*
+* Description
+*
+* OnDriverUnload is called by the framework when the driver unloads.
+*
+* Parameters
+*   Driver - Handle to a framework driver object created in DriverEntry.
+*
+* Return val
+*   Null
+*
+******************************************************************************/
+_Use_decl_annotations_
+VOID IddDriverUnload(WDFDRIVER Driver)
+{
+
+    UNREFERENCED_PARAMETER(Driver);
+    WPP_CLEANUP(WdfDriverWdmGetDriverObject(Driver));
+
+    return;
+}
 _Use_decl_annotations_
 NTSTATUS IddSampleDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 {

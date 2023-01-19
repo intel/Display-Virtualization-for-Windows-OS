@@ -9,7 +9,7 @@
 ;--------------------------------------------------------------------------*/
 
 #include "DVServeredid.h"
-#include <debug.h>
+#include<DVServeredid.tmh>
 
 using namespace Microsoft::IndirectDisp;
 PSP_DEVICE_INTERFACE_DETAIL_DATA device_iface_edid_data;
