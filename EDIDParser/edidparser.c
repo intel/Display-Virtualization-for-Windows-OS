@@ -43,9 +43,9 @@ int parse_edid_data(unsigned char* edid_data, struct output_modelist* kmd_modeli
 
 	get_timing_bitmaps_modes(edid_data, kmd_modelist);
 	get_standard_modes(edid_data, kmd_modelist);
-	get_additional_standard_display_modes(edid_data, kmd_modelist);
 	get_cea_modes(edid_data, kmd_modelist);
-
+	get_detailed_timing_descriptor_modes(edid_data, kmd_modelist);
+	get_additional_standard_display_modes(edid_data, kmd_modelist);
 	return 0;
 }
 
@@ -384,6 +384,51 @@ void get_additional_standard_display_modes(unsigned char* edid_data, struct outp
 			}
 			break;
 		}
+	}
+}
+
+/*******************************************************************************
+*
+* Description
+*
+* get_detailed_timing_descriptor_modes - parses the detailed timing
+* descriptors if present in EDID
+*
+* Parameters
+* unsigned char *edid_data - input edid 256 bytes array
+* struct output_modelist* modelist - output modelist structure containing
+* all the supported modes (width, height & refresh_rate)
+*
+* Return val
+* void
+*
+******************************************************************************/
+static inline void get_detailed_timing_descriptor_modes(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+{
+	unsigned char* ptr_to_input_data = NULL;
+	unsigned int dtd_h_active = 0, dtd_v_active = 0, dtd_pixel_clk = 0, dtd_h_blank = 0, dtd_v_blank = 0, dtd_h_total = 0, dtd_v_total = 0;
+	double dtd_refresh_rate = 0;
+	int i = DTD_START;
+
+	ptr_to_input_data = edid_data;
+
+	while (i < (DTD_END - DTD_DISPLAY_DESCRIPTOR_HEADER_SIZE)) {
+		if (memcmp(ptr_to_input_data + i, g_dtd_display_header, DTD_DISPLAY_DESCRIPTOR_HEADER_SIZE) != 0) {
+			dtd_pixel_clk = (edid_data[i + BYTE_POSITION(0)] + (edid_data[i + BYTE_POSITION(1)] << SHIFT_INDEX(8))) * CLK_UNIT;
+			dtd_h_active = ((edid_data[i + BYTE_POSITION(4)] >> SHIFT_INDEX(4)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(2)];
+			dtd_v_active = ((edid_data[i + BYTE_POSITION(7)] >> SHIFT_INDEX(4)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(5)];
+			dtd_h_blank = ((edid_data[i + BYTE_POSITION(4)] & SHIFT_INDEX(15)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(3)];
+			dtd_v_blank = ((edid_data[i + BYTE_POSITION(7)] & SHIFT_INDEX(15)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(6)];
+			dtd_h_total = dtd_h_active + dtd_h_blank;
+			dtd_v_total = dtd_v_active + dtd_v_blank;
+			dtd_refresh_rate = dtd_pixel_clk / (dtd_h_total * dtd_v_total);
+
+			kmd_modelist->modelist[kmd_modelist->modelist_size].width = dtd_h_active;
+			kmd_modelist->modelist[kmd_modelist->modelist_size].height = dtd_v_active;
+			kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate = dtd_refresh_rate;
+			kmd_modelist->modelist_size++;
+		}
+		i = (i + DTD_STANDARD_DESC_SIZE);
 	}
 }
 

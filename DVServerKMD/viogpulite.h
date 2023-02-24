@@ -94,6 +94,7 @@ public:
     VioGpuMemSegment m_FrameSegment;
     VioGpuObj* m_pFrameBuf;
     BOOL m_FlushCount;
+    BOOL enabled;
 
 public:
     ScreenInfo();
@@ -166,19 +167,20 @@ public:
         return m_Flags.HardwareInit;
     }
     UINT32 GetNumScreens() { return m_u32NumScanouts; }
-    UINT32 GetModeListSize(UINT32 screen_num) { return m_screen[screen_num].mode_list.modelist_size;  }
+    UINT32 GetModeListSize(UINT32 screen_num) { return m_screen[screen_num].mode_list.modelist_size; }
     VOID CopyResolution(UINT32 screen_num, struct edid_info* edata);
     PVOID GetFbVAddr(UINT32 screen_num) { return m_screen[screen_num].m_FrameSegment.GetFbVAddr(); }
     VOID Close(UINT32 screen_num) { m_screen[screen_num].m_FrameSegment.Close(); }
+    PBYTE GetEdidData(UINT Idx);
+    VOID FillPresentStatus(struct hp_info* info);
+    VOID SetEvent(HANDLE event);
+
 private:
 
     void SetHardwareInit(BOOLEAN init)
     {
         m_Flags.HardwareInit = init;
     }
-
-protected:
-private:
     NTSTATUS VioGpuAdapterLiteInit();
     void VioGpuAdapterLiteClose(void);
     NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo);
@@ -199,8 +201,6 @@ private:
     void ConfigChanged(void);
     NTSTATUS VirtIoDeviceInit(void);
     DEVICE_STATUS_FLAG m_Flags;
-
-private:
     VirtIODevice m_VioDev;
     CPciResources m_PciResources;
     UINT64 m_u64HostFeatures;
@@ -215,12 +215,10 @@ private:
     VioGpuMemSegment m_CursorSegment;
     volatile ULONG m_PendingWorks;
     KEVENT m_ConfigUpdateEvent;
-
     PETHREAD m_pWorkThread;
     BOOLEAN m_bStopWorkThread;
     CURRENT_MODE m_CurrentModeInfo;
     BOOLEAN m_bBlobSupported;
-public:
-	PBYTE GetEdidData(UINT Idx);
+    PKEVENT hpd_event;
 };
 

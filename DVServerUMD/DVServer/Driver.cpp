@@ -38,7 +38,10 @@ using namespace Microsoft::WRL;
 DeviceInfo* g_DevInfo;
 UINT g_DevInfoCounter = 0;
 BOOL g_init_kmd_resources = TRUE;
+struct hp_info* g_hdata = NULL;
+ULONG g_bytesReturned = 0;
 
+IDDCX_MONITOR g_monitorobject_list[MAX_SCAN_OUT] = {0};
 
 #pragma region SampleMonitors
 
@@ -1168,7 +1171,36 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
         // Tell the OS that the monitor has been plugged in
         IDARG_OUT_MONITORARRIVAL ArrivalOut;
         Status = IddCxMonitorArrival(MonitorCreateOut.MonitorObject, &ArrivalOut);
+        g_monitorobject_list[ConnectorIndex] = MonitorCreateOut.MonitorObject;
     }
+}
+
+/*******************************************************************************
+*
+* Description
+*
+* HPDThread - In This function we are creating a new thread for HOT PLUG feature
+* where we will pass the display addapter, which is created by OS to add and
+* remove the monitors in runtime
+*
+* Parameters
+* IDDCX_ADAPTER - Display adapter from OS to add the additional monitor
+*
+* Return val
+* int - 0 == SUCCESS, -1 = ERROR
+*
+******************************************************************************/
+DWORD CALLBACK IndirectDeviceContext::HPDThread(LPVOID Argument)
+{
+    TRACING();
+
+    IDDCX_ADAPTER AdapterObject = (IDDCX_ADAPTER)Argument;
+
+    if (hpd_event_create(AdapterObject) == DVSERVERUMD_FAILURE) {
+        ERR("Failed to create HPD Event");
+    }
+
+    return 0;
 }
 
 IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, _In_ UINT ConnectorIndex) :
@@ -1266,14 +1298,11 @@ NTSTATUS IddSampleAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_I
 {
     // This is called when the OS has finished setting up the adapter for use by the IddCx driver. It's now possible
     // to report attached monitors.
-
     auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
     if (NT_SUCCESS(pInArgs->AdapterInitStatus))
     {
-        for (DWORD i = 0; i < idd_monitor_count; i++)
-        {
-            pDeviceContextWrapper->pContext->FinishInit(i);
-        }
+        pDeviceContextWrapper->pContext->FinishInit(PRIMARY_IDD_INDEX);
+        CreateThread(nullptr, 0, IndirectDeviceContext::HPDThread, AdapterObject, 0, nullptr);
     }
 
     return STATUS_SUCCESS;
@@ -1436,6 +1465,166 @@ NTSTATUS IddSampleMonitorUnassignSwapChain(IDDCX_MONITOR MonitorObject)
     auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
     pMonitorContextWrapper->pContext->UnassignSwapChain();
     return STATUS_SUCCESS;
+}
+
+
+/*******************************************************************************
+*
+* Description
+*
+* hpd_event_create - This function creates an HOTPLUG event. Passes the
+* event handle to KMD and gets the current display status. Then compares
+* the perivous display state with current display state and calls  FinishInit/
+* IddCxMonitorDeparture
+*
+* Parameters
+* IDDCX_ADAPTER -- Display adapter from OS to add the additional monitor
+*
+* Return val
+* int - 0 == SUCCESS, -1 = ERROR
+*
+******************************************************************************/
+int hpd_event_create(IDDCX_ADAPTER AdapterObject)
+{
+    TRACING();
+
+    HANDLE hp_event = NULL;
+    HANDLE dve_event = NULL;
+    DWORD waitstatus;
+    int status;
+    int count;
+    hp_info hdata = {0};
+    static bool monitor_status[MAX_SCAN_OUT] = { 0 };
+    HANDLE devHandle = g_DevInfo->get_Handle();
+    auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
+
+    //Create Security Descriptor for HOTPLUG_EVENT, To allow the user application(Dvenabler) to access the event
+    PSECURITY_DESCRIPTOR hp_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+    InitializeSecurityDescriptor(hp_psd, SECURITY_DESCRIPTOR_REVISION);
+    SetSecurityDescriptorDacl(hp_psd, TRUE, NULL, FALSE);
+
+    SECURITY_ATTRIBUTES hp_sa = { 0 };
+    hp_sa.nLength = sizeof(hp_sa);
+    hp_sa.lpSecurityDescriptor = hp_psd;
+    hp_sa.bInheritHandle = FALSE;
+
+    hp_event = CreateEvent(&hp_sa, FALSE, FALSE, HOTPLUG_EVENT);
+    if (NULL == hp_event) {
+        ERR("Cannot create HOTPULG event!\n");
+        return DVSERVERUMD_FAILURE;
+    }
+    hdata.event = hp_event;
+
+    //Create Security Descriptor for DVE_EVENT, To allow the user application(DVenabler) to access the event
+    PSECURITY_DESCRIPTOR dve_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+    InitializeSecurityDescriptor(dve_psd, SECURITY_DESCRIPTOR_REVISION);
+    SetSecurityDescriptorDacl(dve_psd, TRUE, NULL, FALSE);
+
+    SECURITY_ATTRIBUTES dve_sa = { 0 };
+    dve_sa.nLength = sizeof(dve_sa);
+    dve_sa.lpSecurityDescriptor = dve_psd;
+    dve_sa.bInheritHandle = FALSE;
+
+    dve_event = CreateEvent(&dve_sa, FALSE, FALSE, DVE_EVENT);
+    if (NULL == dve_event) {
+        ERR("Cannot create DVE event!\n");
+        CloseHandle(hp_event);
+        return DVSERVERUMD_FAILURE;
+    }
+
+    while (1) {
+        //After user login, first time DVenabler will set this event to enable the HPD Path.
+        //KMD will set this for every HP interrupt recieved from QEMU.
+        waitstatus = WaitForSingleObject(hp_event, INFINITE);
+        if (waitstatus == WAIT_OBJECT_0) {
+            hdata.screen_present[3] = { 0 };
+            if (get_hpd_data(devHandle, &hdata) != DVSERVERUMD_SUCCESS) {
+                ERR("HotPlug resource allocation failed... Going back to the loop again");
+                continue;
+            }
+
+            //call display arrival and departure based on previous and current display state.
+            for (count = 0; count < MAX_SCAN_OUT; count++) {
+                if (monitor_status[count] != hdata.screen_present[count]) {
+                    monitor_status[count] = hdata.screen_present[count];
+                    if (hdata.screen_present[count] == 0) {
+                        DBGPRINT("call depature for DISPLAY = %d\n", count);
+                        IddCxMonitorDeparture(g_monitorobject_list[count]);
+                        g_monitorobject_list[count] = NULL;
+                        status = SetEvent(dve_event);
+                        if (status == NULL)
+                        {
+                            ERR("Set dve-event failed during Display arrival with error [%d]\n ", GetLastError());
+                        }
+                    }
+                    else {
+                        DBGPRINT("call finishinit for DISPLAY = %d\n", count);
+                        pDeviceContextWrapper->pContext->FinishInit(count);
+                        status = SetEvent(dve_event);
+                        if (status == NULL)
+                        {
+                            ERR("Set dve-event failed during display departure with error [%d]\n ", GetLastError());
+                        }
+                    }
+                }
+                else {
+                    DBGPRINT("No changes in DISPLAY = %d\n", count);
+                }
+            }
+        }
+        else {
+            ERR("HPD Wait was either cancelled or something unexpected happened");
+            break;
+        }
+    }
+    CloseHandle(hp_event);
+    CloseHandle(dve_event);
+    return DVSERVERUMD_SUCCESS;
+}
+
+/*******************************************************************************
+*
+* Description
+*
+* get_hpd_data - whenever the HPEVENT is set, this function sends an
+* ioctl(IOCTL_DVSERVER_HP_EVENT) to DVserverKMD to get the current
+* display status which is recieved from QEMU
+*
+* Parameters
+* devHandle - device frame Handle to DVServerKMD
+* data - pointer to hp_info structure
+*
+* Return val
+* int - 0 == SUCCESS, -1 = ERROR
+*
+******************************************************************************/
+int get_hpd_data(HANDLE devHandle, hp_info* data)
+{
+    TRACING();
+
+    int i;
+
+    g_hdata = (struct hp_info*)malloc(sizeof(struct hp_info));
+    if (g_hdata == NULL) {
+        ERR("Failed to allocate HPD structure\n");
+        return DVSERVERUMD_FAILURE;
+    }
+
+    SecureZeroMemory(g_hdata, sizeof(struct hp_info));
+    g_hdata->event = data->event;
+
+    if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_HP_EVENT, g_hdata, sizeof(struct hp_info), g_hdata, sizeof(struct hp_info), &g_bytesReturned, NULL)) {
+        ERR("IOCTL_DVSERVER_HPD_EVENT  call failed\n");
+        free(g_hdata);
+        return DVSERVERUMD_FAILURE;
+    }
+
+    for (i = 0; i < MAX_SCAN_OUT; i++) {
+        data->screen_present[i] = g_hdata->screen_present[i];
+    }
+
+    free(g_hdata);
+    return DVSERVERUMD_SUCCESS;
 }
 
 #pragma endregion

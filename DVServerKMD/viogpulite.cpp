@@ -69,6 +69,7 @@ ScreenInfo::ScreenInfo()
     mode_list.modelist_size = 0;
     m_pFrameBuf = NULL;
     m_FlushCount = 0;
+    enabled = FALSE;
 }
 
 ScreenInfo::~ScreenInfo()
@@ -109,12 +110,16 @@ VioGpuAdapterLite::VioGpuAdapterLite(_In_ PVOID pvDeviceContext) : IVioGpuAdapte
     m_bStopWorkThread = FALSE;
     m_pWorkThread = NULL;
     m_bBlobSupported = FALSE;
+    hpd_event = NULL;
 }
 
 VioGpuAdapterLite::~VioGpuAdapterLite(void)
 {
     PAGED_CODE();
     TRACING();
+    if (hpd_event) {
+        ObDereferenceObject(hpd_event);
+    }
     VioGpuAdapterLiteClose();
     HWClose();
     m_Id = 0;
@@ -750,7 +755,8 @@ BOOLEAN VioGpuAdapterLite::GetDisplayInfo(UINT32 screen_num)
     ULONG yres = 0;
 
     if (m_CtrlQueue.AskDisplayInfo(&vbuf, &m_screen[screen_num].m_DisplayInfoEvent)) {
-        m_CtrlQueue.GetDisplayInfo(vbuf, screen_num, &xres, &yres);
+        m_screen[screen_num].enabled = m_CtrlQueue.GetDisplayInfo(vbuf, screen_num, &xres, &yres);
+        DBGPRINT("Screen %d status = %s\n", screen_num, (m_screen[screen_num].enabled) ? "Enabled" : "Disabled");
         m_CtrlQueue.ReleaseBuffer(vbuf);
         if (xres && yres) {
             DBGPRINT("(%dx%d)\n", xres, yres);
@@ -824,7 +830,7 @@ void VioGpuAdapterLite::AddEdidModes(UINT32 screen_num)
         }
     }
     else {
-        for (unsigned int i = 0; i < QEMU_MODELIST_SIZE; i++) {
+        for (unsigned int i = 0; i < m_screen[screen_num].mode_list.modelist_size; i++) {
             m_screen[screen_num].gpu_disp_mode_ext[i].XResolution = (USHORT)m_screen[screen_num].mode_list.modelist[i].width;
             m_screen[screen_num].gpu_disp_mode_ext[i].YResolution = (USHORT)m_screen[screen_num].mode_list.modelist[i].height;
             m_screen[screen_num].gpu_disp_mode_ext[i].refresh = m_screen[screen_num].mode_list.modelist[i].refresh_rate;
@@ -1054,6 +1060,10 @@ void VioGpuAdapterLite::ConfigChanged(void)
     if (events_read & VIRTIO_GPU_EVENT_DISPLAY) {
         for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
             GetDisplayInfo(i);
+        }
+        if (hpd_event) {
+            DBGPRINT("Sending Hot Plug event to UMD\n");
+            KeSetEvent(hpd_event, IO_NO_INCREMENT, FALSE);
         }
         events_clear |= VIRTIO_GPU_EVENT_DISPLAY;
         virtio_set_config(&m_VioDev, FIELD_OFFSET(GPU_CONFIG, events_clear),
@@ -1360,6 +1370,26 @@ BOOLEAN VioGpuAdapterLite::GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLON
 
     obj->SetId(res_id);
     return TRUE;
+}
+
+VOID VioGpuAdapterLite::SetEvent(HANDLE event)
+{
+    NTSTATUS status;
+    /* If the UMD has provided us with an event and we don't have it initialized already */
+    if (event && !hpd_event) {
+        status = ObReferenceObjectByHandle(event, SYNCHRONIZE | EVENT_MODIFY_STATE,
+            *ExEventObjectType, UserMode, (PVOID * ) &hpd_event, NULL);
+        if (status != STATUS_SUCCESS) {
+            ERR("Couldn't retrieve event from handle. Error is %d\n", status);
+        }
+    }
+}
+
+VOID VioGpuAdapterLite::FillPresentStatus(struct hp_info* info)
+{
+    for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
+        info->screen_present[i] = m_screen[i].enabled;
+    }
 }
 
 PAGED_CODE_SEG_END
