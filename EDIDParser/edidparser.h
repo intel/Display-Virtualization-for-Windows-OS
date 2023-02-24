@@ -18,6 +18,8 @@
 #define OUTPUT_MODELIST_SIZE							32
 #define EDID_FIRST_BLOCK_END							127					// End Index of EDID First 128 Bytes
 #define EDID_SECOND_BLOCK_START							128					// Start Index of EDID Second 128 Bytes
+#define SHIFT_INDEX(x)									(MASK & x)			// Mask to retrieve Shift index
+#define BYTE_POSITION(y)								(MASK & y)			// Mask to retrieve Byte Position
 
 // Timing Bitmaps
 #define TIMING_BITMAP_MODELIST_SIZE						17					// Size of Timing Bitmap Modelist
@@ -40,17 +42,21 @@
 #define CEA_MODELIST_FIRST_BLOCK						127					// End Index of CEA Modelist first half
 #define CEA_MODELIST_SECOND_BLOCK						193					// Start Index of the CEA Modelist second half
 
-// DTD Additional Standard Timings
+// DTD Timings
 #define DTD_START										54					// DTD Data Blocks Starting Index
 #define DTD_END											126					// DTD Data Blocks Ending Index
 #define DTD_ADDITIONAL_STANDARD_TIMING_MODELIST_SIZE	44					// Size of Additional Standard Timing Modelist
 #define DTD_ADDITIONAL_STANDARD_HEADER_SIZE				5					// Header Size of additional standard display modes
 #define DTD_ADDITIONAL_STANDARD_START_BYTE				6					// DTD Data Block data byte start position
 #define DTD_ADDITIONAL_STANDARD_TOTAL_BYTES				5					// DTD Data Block total number of resolution bytes
+#define DTD_DISPLAY_DESCRIPTOR_HEADER_SIZE				2					// DTD Display Descriptor Header size
+#define DTD_STANDARD_DESC_SIZE							18					// DTD Block size
+#define CLK_UNIT										10000				// Clock 10kHz units
 
 // Header Data
 const unsigned char g_edid_header[EDID_HEADER_SIZE] = { 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x00 };
 const unsigned char g_additional_standard_header[DTD_ADDITIONAL_STANDARD_HEADER_SIZE] = { 0x00, 0x00, 0x00, 0xf7, 0x00 };
+const unsigned char g_dtd_display_header[DTD_DISPLAY_DESCRIPTOR_HEADER_SIZE] = { 0x00, 0x00 };
 
 // APIs
 static inline int validate_edid_header(unsigned char*);
@@ -59,6 +65,7 @@ static inline void get_timing_bitmaps_modes(unsigned char*, struct output_modeli
 static inline void get_standard_modes(unsigned char*, struct output_modelist*);
 static inline void get_additional_standard_display_modes(unsigned char*, struct output_modelist*);
 static inline void get_cea_modes(unsigned char*, struct output_modelist*);
+static inline void get_detailed_timing_descriptor_modes(unsigned char*, struct output_modelist*);
 
 // Timing Bitmap from EDID 1.4 Spec
 struct edid_qemu_modes timing_bitmap_modelist[TIMING_BITMAP_MODELIST_SIZE] = {

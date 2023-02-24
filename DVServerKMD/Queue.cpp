@@ -212,10 +212,6 @@ Return Value:
 		WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 		break;
 
-	case IOCTL_DVSERVER_GENERAL:
-		// << TODO>>
-		break;
-
 	case IOCTL_DVSERVER_TEST_IMAGE:
 		status = IoctlRequestPresentFb(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
 		if (status != STATUS_SUCCESS)
@@ -233,6 +229,11 @@ Return Value:
 		break;
 	case IOCTL_DVSERVER_GET_TOTAL_SCREENS:
 		status = IoctlRequestTotalScreens(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
+		if (status != STATUS_SUCCESS)
+			return;
+		break;
+	case IOCTL_DVSERVER_HP_EVENT:
+		status = IoctlRequestHPEventInfo(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
 		if (status != STATUS_SUCCESS)
 			return;
 		break;
@@ -516,7 +517,6 @@ static NTSTATUS IoctlRequestTotalScreens(
 	const WDFREQUEST      Request,
 	size_t* BytesReturned)
 {
-	UNREFERENCED_PARAMETER(DeviceContext);
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	UNREFERENCED_PARAMETER(OutputBufferLength);
 	UNREFERENCED_PARAMETER(BytesReturned);
@@ -529,7 +529,7 @@ static NTSTATUS IoctlRequestTotalScreens(
 		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
 
 	if (!pAdapter) {
-		ERR("Coudlnt' find adapter\n");
+		ERR("Couldn't find adapter\n");
 		return status;
 	}
 
@@ -537,11 +537,53 @@ static NTSTATUS IoctlRequestTotalScreens(
 	if (!NT_SUCCESS(status)) {
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
 		return status;
-
 	}
 
 	mdata->total_screens = pAdapter->GetNumScreens();
 	WdfRequestSetInformation(Request, sizeof(struct screen_info));
+
+	return STATUS_SUCCESS;
+}
+
+static NTSTATUS IoctlRequestHPEventInfo(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const size_t          OutputBufferLength,
+	const WDFREQUEST      Request,
+	size_t* BytesReturned)
+{
+	UNREFERENCED_PARAMETER(DeviceContext);
+	UNREFERENCED_PARAMETER(InputBufferLength);
+	UNREFERENCED_PARAMETER(OutputBufferLength);
+	UNREFERENCED_PARAMETER(Request);
+	UNREFERENCED_PARAMETER(BytesReturned);
+
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	struct hp_info* info = NULL;
+	size_t bufSize;
+
+	status = WdfRequestRetrieveInputBuffer(Request, 0, (PVOID*)&info, &bufSize);
+	if (!NT_SUCCESS(status)) {
+		ERR("Couldn't retrieve Input buffer\n");
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return status;
+	}
+
+	VioGpuAdapterLite* pAdapter =
+		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
+
+	if (!pAdapter) {
+		ERR("Couldn't find adapter\n");
+		return status;
+	}
+	status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&info, &bufSize);
+	if (!NT_SUCCESS(status)) {
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return status;
+	}
+	pAdapter->SetEvent(info->event);
+	pAdapter->FillPresentStatus(info);
+	WdfRequestSetInformation(Request, sizeof(struct hp_info));
 
 	return STATUS_SUCCESS;
 }

@@ -8,7 +8,11 @@
 -----------------------------------------------------------
 #####  Windows VM QEMU CMD Example #####
 -----------------------------------------------------------
-sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,sockets=1 -drive file=<WindowsOS.img>.img,format=qcow2,cache=none -device vfio-pci,host=0000:00:02.2 -device e1000,netdev=net0,mac=DE:AD:BE:EF:1C:00 -netdev tap,id=net0 -device virtio-vga,max_outputs=<no. of display, between 1-4>,blob=true -display gtk,gl=on,full-screen=<on/off>,connectors.0=DP-2,connectors.1=DP-2,connectors.2=DP-2,connectors.3=DP-2,show-fps=on -object memory-backend-memfd,id=mem1,hugetlb=on,size=4096M -machine memory-backend=mem1
+sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,sockets=1 -drive file=<WindowsOS.img>.img,format=qcow2,cache=none -device vfio-pci,host=0000:00:02.2 -device e1000,netdev=net0,mac=DE:AD:BE:EF:1C:00 -netdev tap,id=net0 -device virtio-vga,max_outputs=4,blob=true -display gtk,gl=on,full-screen=<on/off>,connectors.0 = <display-port-name>, connectors.1=<display-port-name>, connectors.2=<display-port-name>, connectors.3=<display-port-name>, show-fps=on -object memory-backend-memfd,id=mem1,hugetlb=on,size=4096M -machine memory-backend=mem1
+
+Note:
+use the below command to get the display port name for that particular board
+“cat /sys/kernel/debug/dri/0/i915_display_info”
 
 -----------------------------------------------------------
 ##### Pre-requisites #####
@@ -26,10 +30,10 @@ sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,soc
 3) Make sure ZC files copied in respective folder structure -
 	3.1) DVServer\dvserverkmd.cat, DVServer\DVServerKMD.inf, DVServer\DVServerKMD.sys
 	3.2) DVServer\dvserver.cat, DVServer\DVServer.dll, DVServer\DVServer.inf
-	3.3) DVEnabler.exe
+	3.3) DVEnabler.dll
 4) GFX Installation and ZC Installation
 	4.1) Open powershell in admin mode and goto ZeroCopy binary folder
-	4.2) Run : ".\DVInstaller.ps1" - This will install both GFX driver and ZC driver
+	4.2) Run : ".\DVInstaller.ps1" - This will install GFX driver, ZC driver and start the DVEnabler as a windows service
 	4.3) Auto reboot will happen
 5) After successfully rebooting, check below driver entry inside device manager. There should not be a yellow bang on any of the below drivers.
 	5.1) Display Adapter --> GFX driver

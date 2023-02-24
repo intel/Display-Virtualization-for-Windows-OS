@@ -21,7 +21,7 @@ function check_executables()
 		(is_present("DVServer\dvserverkmd.cat") -eq $true) -and
 		(is_present("DVServer\DVServerKMD.inf") -eq $true) -and
 		(is_present("DVServer\DVServerKMD.sys") -eq $true) -and
-		(is_present("DVEnabler.exe") -eq $true) -and
+		(is_present("DVEnabler.dll") -eq $true) -and
         (is_present("GraphicsDriver\Graphics\iigd_dch.inf") -eq $true)){
             Write-Host "Setup files present"
 			return "SUCCESS"
@@ -53,8 +53,29 @@ else {
 		}
 	}
 	
-	Write-Host "Running DVEnabler..."
-	& ".\DVEnabler.exe"
+	Write-Host "creating DVEnabler Task and running it as service ..."
+
+	Remove-Item -path C:\Windows\System32\DVEnabler.dll
+
+	rundll32.exe DVEnabler.dll,dvenabler_init
+	while($true){
+		$DVE = tasklist /m | findstr "DVEnabler.dll"
+		if ($DVE) {
+			Write-Host "DvEnabler started as service ."
+			break
+		}
+		else{
+			Write-Host " Dvenabler not yet started. Please wait..."
+			continue
+		}
+	}
+
+	cp DVEnabler.dll C:\Windows\System32
+	unregister-scheduledtask -TaskName "DVEnabler" -confirm:$false -ErrorAction SilentlyContinue
+		$ac = New-ScheduledTaskAction -Execute "rundll32.exe"  -Argument "C:\Windows\System32\DVEnabler.dll,dvenabler_init"
+		$tr = New-ScheduledTaskTrigger -AtLogOn
+		$pr = New-ScheduledTaskPrincipal  -Groupid  "INTERACTIVE"
+	Register-ScheduledTask -TaskName "DVEnabler" -Trigger $tr -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr
 	if ($LASTEXITCODE -eq 0) {
 		Write-Host "DVEnabler Success. DVServerUMD has taken over MSBDA!"
 	} else {

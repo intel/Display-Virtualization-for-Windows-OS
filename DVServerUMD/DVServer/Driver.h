@@ -183,6 +183,7 @@ namespace Microsoft
 
             void InitAdapter();
             void FinishInit(UINT ConnectorIndex);
+            static DWORD CALLBACK HPDThread(LPVOID Argument);
 
         protected:
             WDFDEVICE m_WdfDevice;
@@ -209,3 +210,5 @@ namespace Microsoft
         };
     }
 }
+int hpd_event_create(IDDCX_ADAPTER AdapterObject);
+int get_hpd_data(HANDLE devHandle, struct hp_info* data);
