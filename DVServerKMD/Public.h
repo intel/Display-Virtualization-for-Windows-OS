@@ -2,16 +2,16 @@
 
 Module Name:
 
-    public.h
+	public.h
 
 Abstract:
 
-    This module contains the common declarations shared by driver
-    and user applications.
+	This module contains the common declarations shared by driver
+	and user applications.
 
 Environment:
 
-    user and kernel
+	user and kernel
 
 --*/
 #ifndef __PUBLIC_H__
@@ -20,8 +20,8 @@ Environment:
 // Define an Interface Guid so that apps can find the device and talk to it.
 //
 
-DEFINE_GUID (GUID_DEVINTERFACE_DVServerKMD,
-    0x1c514918,0xa855,0x460a,0x97,0xda,0xed,0x69,0x1d,0xd5,0x63,0xcf);
+DEFINE_GUID(GUID_DEVINTERFACE_DVServerKMD,
+	0x1c514918, 0xa855, 0x460a, 0x97, 0xda, 0xed, 0x69, 0x1d, 0xd5, 0x63, 0xcf);
 // {1c514918-a855-460a-97da-ed691dd563cf}
 
 #define MAX_SCAN_OUT               4

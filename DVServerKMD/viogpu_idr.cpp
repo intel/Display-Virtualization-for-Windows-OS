@@ -37,37 +37,37 @@
 
 VioGpuIdr::VioGpuIdr()
 {
-    m_uStartIndex = 0;
-    m_IdBitMap.SizeOfBitMap = 0;
-    m_IdBitMap.Buffer = NULL;
+	m_uStartIndex = 0;
+	m_IdBitMap.SizeOfBitMap = 0;
+	m_IdBitMap.Buffer = NULL;
 }
 
 VioGpuIdr::~VioGpuIdr()
 {
-    Close();
+	Close();
 }
 
 BOOLEAN VioGpuIdr::Init(
-    _In_ ULONG start)
+	_In_ ULONG start)
 {
-    PUCHAR buf = NULL;
-    BOOLEAN ret = FALSE;
-    m_uStartIndex = start;
-    ExInitializeFastMutex(&m_IdBitMapMutex);
+	PUCHAR buf = NULL;
+	BOOLEAN ret = FALSE;
+	m_uStartIndex = start;
+	ExInitializeFastMutex(&m_IdBitMapMutex);
 
-    VIOGPU_ASSERT(m_IdBitMap.Buffer == NULL);
-    Lock();
-    buf = new (NonPagedPoolNx) UCHAR[PAGE_SIZE];
-    if (buf) {
-        RtlInitializeBitMap(&m_IdBitMap,
-            (PULONG)buf,
-            CHAR_BIT * PAGE_SIZE);
-        RtlClearAllBits(&m_IdBitMap);
-        RtlSetBits(&m_IdBitMap, 0, m_uStartIndex);
-        ret = TRUE;
-    }
-    Unlock();
-    return ret;
+	VIOGPU_ASSERT(m_IdBitMap.Buffer == NULL);
+	Lock();
+	buf = new (NonPagedPoolNx) UCHAR[PAGE_SIZE];
+	if (buf) {
+		RtlInitializeBitMap(&m_IdBitMap,
+			(PULONG)buf,
+			CHAR_BIT * PAGE_SIZE);
+		RtlClearAllBits(&m_IdBitMap);
+		RtlSetBits(&m_IdBitMap, 0, m_uStartIndex);
+		ret = TRUE;
+	}
+	Unlock();
+	return ret;
 }
 
 #pragma warning( disable: 28167 )
@@ -75,7 +75,7 @@ BOOLEAN VioGpuIdr::Init(
 //_IRQL_saves_global_(OldIrql, m_IdBitMapMutex)
 VOID VioGpuIdr::Lock(VOID)
 {
-    ExAcquireFastMutex(&m_IdBitMapMutex);
+	ExAcquireFastMutex(&m_IdBitMapMutex);
 }
 
 #pragma warning( disable: 28167 )
@@ -83,48 +83,48 @@ VOID VioGpuIdr::Lock(VOID)
 //_IRQL_restores_global_(OldIrql, m_IdBitMapMutex)
 VOID VioGpuIdr::Unlock(VOID)
 {
-    ExReleaseFastMutex(&m_IdBitMapMutex);
+	ExReleaseFastMutex(&m_IdBitMapMutex);
 }
 
 ULONG VioGpuIdr::GetId(VOID)
 {
-    ULONG id = 0;
-    Lock();
-    if (m_IdBitMap.Buffer != NULL)
-    {
-        id = RtlFindClearBitsAndSet(&m_IdBitMap, 1, 0);
-    }
-    Unlock();
-    DBGPRINT("id = %d\n", id);
-    ASSERT(id < USHORT_MAX);
-    return id;
+	ULONG id = 0;
+	Lock();
+	if (m_IdBitMap.Buffer != NULL)
+	{
+		id = RtlFindClearBitsAndSet(&m_IdBitMap, 1, 0);
+	}
+	Unlock();
+	DBGPRINT("id = %d\n", id);
+	ASSERT(id < USHORT_MAX);
+	return id;
 }
 
 VOID VioGpuIdr::PutId(ULONG id)
 {
-    ASSERT(id >= m_uStartIndex);
-    ASSERT(id <= (CHAR_BIT * PAGE_SIZE));
-    DBGPRINT("bit %d\n", id);
-    Lock();
-    if (m_IdBitMap.Buffer != NULL)
-    {
-        if (!RtlAreBitsSet(&m_IdBitMap, id, 1))
-        {
-            ERR("bit %d is not set\n", id - m_uStartIndex);
-        }
-        RtlClearBits(&m_IdBitMap, id, 1);
-    }
-    Unlock();
+	ASSERT(id >= m_uStartIndex);
+	ASSERT(id <= (CHAR_BIT * PAGE_SIZE));
+	DBGPRINT("bit %d\n", id);
+	Lock();
+	if (m_IdBitMap.Buffer != NULL)
+	{
+		if (!RtlAreBitsSet(&m_IdBitMap, id, 1))
+		{
+			ERR("bit %d is not set\n", id - m_uStartIndex);
+		}
+		RtlClearBits(&m_IdBitMap, id, 1);
+	}
+	Unlock();
 }
 
 VOID VioGpuIdr::Close(VOID)
 {
-    Lock();
-    if (m_IdBitMap.Buffer != NULL)
-    {
-        delete[] m_IdBitMap.Buffer;
-        m_IdBitMap.Buffer = NULL;
-    }
-    m_uStartIndex = 0;
-    Unlock();
+	Lock();
+	if (m_IdBitMap.Buffer != NULL)
+	{
+		delete[] m_IdBitMap.Buffer;
+		m_IdBitMap.Buffer = NULL;
+	}
+	m_uStartIndex = 0;
+	Unlock();
 }

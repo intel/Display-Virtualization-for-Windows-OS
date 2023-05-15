@@ -29,7 +29,7 @@
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
 
 int get_total_screens(HANDLE devHandle);
-int get_edid_data(HANDLE devHandle, void *m, DWORD id);
+int get_edid_data(HANDLE devHandle, void* m, DWORD id);
 int is_blacklist(unsigned int width, unsigned int height);
 
 #endif /* __DVSERVER_EDID_H__ */

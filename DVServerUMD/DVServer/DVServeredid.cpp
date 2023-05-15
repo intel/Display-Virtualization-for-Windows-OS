@@ -36,11 +36,11 @@ char* screenedid[MAX_SCAN_OUT] = { "ScreenEDID1", "ScreenEDID2", "ScreenEDID3", 
 * int - 0 == SUCCESS, -1 = ERROR
 *
 ******************************************************************************/
-int get_edid_data(HANDLE devHandle, void *m, DWORD id)
+int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 {
 	TRACING();
-	unsigned int i= 0, edid_mode_index = 0;
-	IndirectSampleMonitor* monitor = (IndirectSampleMonitor *) m;
+	unsigned int i = 0, edid_mode_index = 0;
+	IndirectSampleMonitor* monitor = (IndirectSampleMonitor*)m;
 
 	if (!m) {
 		ERR("Invalid parameter\n");
@@ -58,6 +58,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id)
 		return DVSERVERUMD_FAILURE;
 	}
 	SecureZeroMemory(edata, sizeof(struct edid_info));
+	edata->screen_num = id;
 
 	DBGPRINT("Requesting Mode List size through EDID IOCTL\n");
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_EDID_DATA, edata, sizeof(struct edid_info), edata, sizeof(struct edid_info), &bytesReturned, NULL)) {
@@ -81,7 +82,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id)
 		free(edata);
 		return DVSERVERUMD_FAILURE;
 	}
-	
+
 	wchar_t* Lscreenedid = new wchar_t[strlen(screenedid[id]) + 1];
 	mbstowcs_s(&requiredSize, Lscreenedid, strlen(screenedid[id]) + 1, screenedid[id], strlen(screenedid[id]));
 	if (requiredSize != 0) {
@@ -175,7 +176,7 @@ int get_total_screens(HANDLE devHandle)
 * Description
 *
 * is_blacklist - This function blacklists the resolution it receives from
-* DVserverKMD comparing it from the unsuported reolutions formats which get 
+* DVserverKMD comparing it from the unsuported reolutions formats which get
 * recieved from Qemu.
 *
 * Parameters
