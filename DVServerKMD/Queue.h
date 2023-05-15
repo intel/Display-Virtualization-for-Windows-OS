@@ -2,15 +2,15 @@
 
 Module Name:
 
-    queue.h
+	queue.h
 
 Abstract:
 
-    This file contains the queue definitions.
+	This file contains the queue definitions.
 
 Environment:
 
-    Kernel-mode Driver Framework
+	Kernel-mode Driver Framework
 
 --*/
 
@@ -22,16 +22,16 @@ EXTERN_C_START
 //
 typedef struct _QUEUE_CONTEXT {
 
-    ULONG PrivateDeviceData;  // just a placeholder
+	ULONG PrivateDeviceData;  // just a placeholder
 
-} QUEUE_CONTEXT, *PQUEUE_CONTEXT;
+} QUEUE_CONTEXT, * PQUEUE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(QUEUE_CONTEXT, QueueGetContext)
 
 NTSTATUS
 DVServerKMDQueueInitialize(
-    _In_ WDFDEVICE Device
-    );
+	_In_ WDFDEVICE Device
+);
 
 static NTSTATUS IoctlRequestSetMode(
 	const PDEVICE_CONTEXT DeviceContext,
@@ -59,7 +59,7 @@ static NTSTATUS IoctlRequestTotalScreens(
 	const size_t          InputBufferLength,
 	const size_t          OutputBufferLength,
 	const WDFREQUEST      Request,
-	size_t * BytesReturned);
+	size_t* BytesReturned);
 
 static NTSTATUS IoctlRequestHPEventInfo(
 	const PDEVICE_CONTEXT DeviceContext,

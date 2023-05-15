@@ -21,9 +21,9 @@
 #define DVE_EVENT				L"Global\\DVE_EVENT"
 #define PRIMARY_IDD_INDEX		0
 
-static NTSTATUS open_dvserver_registry(WDFKEY * key);
+static NTSTATUS open_dvserver_registry(WDFKEY* key);
 static void close_dvserver_registry(WDFKEY key);
-int write_dvserver_registry_binary(PCWSTR name, BYTE * buffer, ULONG size);
-int read_dvserver_registry_binary(PCWSTR name, BYTE * buffer, ULONG * size);
+int write_dvserver_registry_binary(PCWSTR name, BYTE* buffer, ULONG size);
+int read_dvserver_registry_binary(PCWSTR name, BYTE* buffer, ULONG* size);
 
 #endif /* __DVSERVER_COMMON_H__ */

@@ -29,8 +29,8 @@
 ******************************************************************************/
 tracer::tracer(const char* func_name)
 {
-    FuncTrace(">>> %s\n", func_name);
-    m_func_name = (char*)func_name;
+	FuncTrace(">>> %s\n", func_name);
+	m_func_name = (char*)func_name;
 }
 /*******************************************************************************
 *
@@ -45,5 +45,5 @@ tracer::tracer(const char* func_name)
 ******************************************************************************/
 tracer::~tracer()
 {
-    FuncTrace("<<< %s\n", m_func_name);
+	FuncTrace("<<< %s\n", m_func_name);
 }

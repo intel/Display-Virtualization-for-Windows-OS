@@ -151,21 +151,21 @@ void get_cea_modes(unsigned char* edid_data, struct output_modelist* kmd_modelis
 				vic_number = vic_number & EDID_MASK(0x1);
 				// VIC Number from 1 to 127
 				if (vic_number <= CEA_MODELIST_FIRST_BLOCK) {
-					kmd_modelist->modelist[kmd_modelist->modelist_size].width 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].width
 						= cea_modelist[vic_number - 1].width;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].height 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].height
 						= cea_modelist[vic_number - 1].height;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
 						= cea_modelist[vic_number - 1].refresh_rate;
 					kmd_modelist->modelist_size++;
 				}
 				// VIC Number from 193 to 219
 				else if (vic_number >= CEA_MODELIST_SECOND_BLOCK) {
-					kmd_modelist->modelist[kmd_modelist->modelist_size].width 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].width
 						= cea_modelist[vic_number - 65].width;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].height 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].height
 						= cea_modelist[vic_number - 65].height;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
 						= cea_modelist[vic_number - 65].refresh_rate;
 					kmd_modelist->modelist_size++;
 				}
@@ -268,11 +268,11 @@ void get_timing_bitmaps_modes(unsigned char* edid_data, struct output_modelist* 
 			// Traverse from the 1st bit to the 8th bit of timing_bitmap byte
 			for (bit_index = 0x0; bit_index <= 0x7; bit_index++) {
 				if ((tb_byte & 0x1) == 1) {
-					kmd_modelist->modelist[kmd_modelist->modelist_size].width 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].width
 						= timing_bitmap_modelist[tb_lookup].width;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].height 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].height
 						= timing_bitmap_modelist[tb_lookup].height;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate 
+					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
 						= timing_bitmap_modelist[tb_lookup].refresh_rate;
 					kmd_modelist->modelist_size++;
 				}
@@ -287,11 +287,11 @@ void get_timing_bitmaps_modes(unsigned char* edid_data, struct output_modelist* 
 		}
 		else {
 			if (((tb_byte >>= 7) & 0x1) == 1) {
-				kmd_modelist->modelist[kmd_modelist->modelist_size].width 
+				kmd_modelist->modelist[kmd_modelist->modelist_size].width
 					= timing_bitmap_modelist[tb_lookup].width;
-				kmd_modelist->modelist[kmd_modelist->modelist_size].height 
+				kmd_modelist->modelist[kmd_modelist->modelist_size].height
 					= timing_bitmap_modelist[tb_lookup].height;
-				kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate 
+				kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
 					= timing_bitmap_modelist[tb_lookup].refresh_rate;
 				kmd_modelist->modelist_size++;
 			}
@@ -341,11 +341,11 @@ void get_additional_standard_display_modes(unsigned char* edid_data, struct outp
 					// Traverse from the 1st bit to the 8th bit of the additional standard mode byte
 					for (bit = 0x0; bit <= 0x7; bit++) {
 						if ((asd_byte & 0x1) == 1) {
-							kmd_modelist->modelist[kmd_modelist->modelist_size].width 
+							kmd_modelist->modelist[kmd_modelist->modelist_size].width
 								= additional_standard_timing_modelist[asd_lookup].width;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].height 
+							kmd_modelist->modelist[kmd_modelist->modelist_size].height
 								= additional_standard_timing_modelist[asd_lookup].height;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate 
+							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
 								= additional_standard_timing_modelist[asd_lookup].refresh_rate;
 							kmd_modelist->modelist_size++;
 						}
@@ -367,11 +367,11 @@ void get_additional_standard_display_modes(unsigned char* edid_data, struct outp
 							break;
 						}
 						if ((asd_byte & 0x1) == 1) {
-							kmd_modelist->modelist[kmd_modelist->modelist_size].width 
+							kmd_modelist->modelist[kmd_modelist->modelist_size].width
 								= additional_standard_timing_modelist[asd_lookup].width;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].height 
+							kmd_modelist->modelist[kmd_modelist->modelist_size].height
 								= additional_standard_timing_modelist[asd_lookup].height;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate 
+							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
 								= additional_standard_timing_modelist[asd_lookup].refresh_rate;
 							kmd_modelist->modelist_size++;
 						}

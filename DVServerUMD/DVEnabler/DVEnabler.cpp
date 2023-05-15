@@ -24,23 +24,43 @@ int dvenabler_init()
 	char err[256];
 	memset(err, 0, 256);
 	int status;
-	bool hpd_path = FALSE;
 	unsigned int path_count = NULL, mode_count = NULL;
 	bool found_id_path = FALSE, found_non_id_path = FALSE;
 	unsigned int prev_path_count = NULL;
 	/* Initializing the baseType.baseOutputTechnology to default OS value(failcase) */
 	baseType.baseOutputTechnology = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER;
 
-	hp_event = OpenEvent(EVENT_MODIFY_STATE, FALSE, HOTPLUG_EVENT);
-	if (hp_event == NULL)
-	{
-		ERR(" Open HPEvent failed with error [%d]\n ", GetLastError());
+	//Create Security Descriptor for HOTPLUG_EVENT, To allow the DVServerUMD to access the event
+	PSECURITY_DESCRIPTOR hp_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+	InitializeSecurityDescriptor(hp_psd, SECURITY_DESCRIPTOR_REVISION);
+	SetSecurityDescriptorDacl(hp_psd, TRUE, NULL, FALSE);
+
+	SECURITY_ATTRIBUTES hp_sa = { 0 };
+	hp_sa.nLength = sizeof(hp_sa);
+	hp_sa.lpSecurityDescriptor = hp_psd;
+	hp_sa.bInheritHandle = FALSE;
+
+	hp_event = CreateEvent(&hp_sa, FALSE, FALSE, HOTPLUG_EVENT);
+	if (NULL == hp_event) {
+		ERR("Cannot create HOTPULG event!\n");
+		return -1;
 	}
 
-	dve_event = OpenEvent(SYNCHRONIZE, FALSE, DVE_EVENT);
-	if (dve_event == NULL)
-	{
-		ERR(" Open DVEevent failed with error [%d]\n ", GetLastError());
+	//Create Security Descriptor for DVE_EVENT, To allow the DVServerUMD to access the event
+	PSECURITY_DESCRIPTOR dve_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
+	InitializeSecurityDescriptor(dve_psd, SECURITY_DESCRIPTOR_REVISION);
+	SetSecurityDescriptorDacl(dve_psd, TRUE, NULL, FALSE);
+
+	SECURITY_ATTRIBUTES dve_sa = { 0 };
+	dve_sa.nLength = sizeof(dve_sa);
+	dve_sa.lpSecurityDescriptor = dve_psd;
+	dve_sa.bInheritHandle = FALSE;
+
+	dve_event = CreateEvent(&dve_sa, FALSE, FALSE, DVE_EVENT);
+	if (NULL == dve_event) {
+		ERR("Cannot create DVE event!\n");
+		CloseHandle(hp_event);
+		return -1;
 	}
 
 	while (1)
@@ -126,23 +146,18 @@ int dvenabler_init()
 				found_non_id_path, found_id_path);
 		}
 
-		if (hpd_path == FALSE)
-		{
-			/*If there is any display config change at the time of reboot / shutdown.
-			At this stage, Since the Dvenabler is not running, Changed display config will not be saved in windows persistence,
-			So at this case MSFT path will be enabled and since the DV enabler starts only after user login
-			The login page  will have blank screen after boot, untill we enter the password.
-			To over come this blank out issue...In UMD always we will always boot with single display config
-			After login, Dvenabler will set the below event to enable the HPD path
-			Once this event is set our DVserver UMD driver will enable the Hot plug path and get the display status from KMD
-			So this event is Set once after every boot to enable the HPD path in our DVServer UMD driver */
-			status = SetEvent(hp_event);
-			if (status == NULL)
-			{
-				ERR(" Set HPevent failed with error [%d]\n ", GetLastError());
-				continue;
-			}
-			hpd_path = TRUE;
+		/*If there is any display config change at the time of reboot / shutdown.
+		At this stage, Since the Dvenabler is not running, Changed display config will not be saved in windows persistence,
+		So at this case MSFT path will be enabled and since the DV enabler starts only after user login
+		The login page  will have blank screen after boot, untill we enter the password.
+		To over come this blank out issue...In UMD always we will always boot with single display config
+		After login, Dvenabler will set the below event to enable the HPD path
+		Once this event is set our DVserver UMD driver will enable the Hot plug path and get the display status from KMD
+		So this event is Set once after every boot to enable the HPD path in our DVServer UMD driver */
+		status = SetEvent(hp_event);
+		if (status == NULL) {
+			ERR(" Set HPevent failed with error [%d]\n ", GetLastError());
+			continue;
 		}
 
 		//wait for arraival or departure call from UMD

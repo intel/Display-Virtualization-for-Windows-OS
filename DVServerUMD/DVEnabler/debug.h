@@ -91,7 +91,7 @@ inline int set_dbg_lvl(int lvl)
 	return ret;
 }
 
-inline void set_module_name(const char *m)
+inline void set_module_name(const char* m)
 {
 	strcpy_s(module_name, 80, m);
 }

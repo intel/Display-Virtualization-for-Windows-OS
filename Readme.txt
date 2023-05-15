@@ -55,6 +55,31 @@ use the below command to get the display port name for that particular board
 	3.2) Open Device Manager --> under system devices --> VirtIO Serial Driver should showup
 
 -----------------------------------------------------------
+#####  DVServer Unit Level Testing (ULT) Application  #####
+-----------------------------------------------------------
+- DVServerULT will imitate DVServerUMD which will talk to DVServerKMD through realtime IOCTL & run below tests.
+- Basically, it will help to isolate any complex issues on the DVServerKMD
+- ULT is an user mode application, this will test the VirtIO GPU pipeline. The ULT will directly interact with KMD via IoCTL's and send the solid color image frame address. 
+- Apart from this, it can get the supported QEMU EDID and displays all the supported modes
+
+IMPORTANT NOTE : This is a parallel UMD component (like DVServerUMD), so we should never attempt to run this ULT when the DVServerUMD is streaming the display frame buffer address
+
+Steps to avoid DVServerUMD:
+1. Install ZC with above method
+2. Go to Device manager -->Display Adapter -->DVServerUMD Device & disable
+3. Screen freeze will be expected & try to reboot the VM from QEMU windows
+4. After reboot, ZC will be disabled
+5. Now we can run DVServerULT.exe as mentioned below.
+
+How to Use:
+[CMD] .\DVServerULT.exe <testcase name>
+Entering the tescase number as a command line arguement is optional. If no arguement is provided, the list of test cases will be displayed.
+edidinfo --> Will display the QEMU supported resolutions and EDID info
+solidframe --> this will perform "Static Frame Test". From list of resolutions, select the resolution for which the static color frame is to be generated and displayed on QEMU
+multicolor --> this will perform "Multicolor Frames Test". From list of resolutions, select the resolution for which the multi color frame to be generated and displayed on QEMU
+multipattern --> this will perform "Multicolor Multiresolution Frames Test". For all the resolutions, multicolor frames are to be generated displayed in a continuous loop on QEMU
+
+-----------------------------------------------------------
 #####  Steps to capture and decode the ETL trace  #####
 -----------------------------------------------------------
 

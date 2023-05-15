@@ -2,15 +2,15 @@
 
 Module Name:
 
-    device.h
+	device.h
 
 Abstract:
 
-    This file contains the device definitions.
+	This file contains the device definitions.
 
 Environment:
 
-    Kernel-mode Driver Framework
+	Kernel-mode Driver Framework
 
 --*/
 
@@ -24,14 +24,14 @@ EXTERN_C_START
 //
 typedef struct _DEVICE_CONTEXT
 {
-    ULONG PrivateDeviceData;    // just a placeholder
-    PVOID pvDeviceExtension;    // for DVServerKMD
-    WDFDEVICE WdfDevice;
-    WDFINTERRUPT WdfInterrupt;
-    WDFCMRESLIST ResourcesRaw;
-    WDFCMRESLIST ResourcesTranslated;
-    BUS_INTERFACE_STANDARD  BusInterface;
-} DEVICE_CONTEXT, *PDEVICE_CONTEXT;
+	ULONG PrivateDeviceData;    // just a placeholder
+	PVOID pvDeviceExtension;    // for DVServerKMD
+	WDFDEVICE WdfDevice;
+	WDFINTERRUPT WdfInterrupt;
+	WDFCMRESLIST ResourcesRaw;
+	WDFCMRESLIST ResourcesTranslated;
+	BUS_INTERFACE_STANDARD  BusInterface;
+} DEVICE_CONTEXT, * PDEVICE_CONTEXT;
 
 //
 // This macro will generate an inline function called DeviceGetContext
@@ -45,8 +45,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, DeviceGetContext)
 //
 NTSTATUS
 DVServerKMDCreateDevice(
-    _Inout_ PWDFDEVICE_INIT DeviceInit
-    );
+	_Inout_ PWDFDEVICE_INIT DeviceInit
+);
 
 EVT_WDF_DEVICE_PREPARE_HARDWARE DVServerKMDEvtPrepareHardware;
 EVT_WDF_DEVICE_RELEASE_HARDWARE DVServerKMDEvtReleaseHardware;

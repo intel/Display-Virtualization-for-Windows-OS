@@ -2,15 +2,15 @@
 
 Module Name:
 
-    driver.h
+	driver.h
 
 Abstract:
 
-    This file contains the driver definitions.
+	This file contains the driver definitions.
 
 Environment:
 
-    Kernel-mode Driver Framework
+	Kernel-mode Driver Framework
 
 --*/
 

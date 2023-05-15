@@ -33,49 +33,49 @@ extern "C" {
 
 #define __CPLUSPLUS
 
-    #include <stddef.h>
-    #include <string.h>
-    #include <stdarg.h>
-    #include <stdio.h>
-    #include <stdlib.h>
+	#include <stddef.h>
+	#include <string.h>
+	#include <stdarg.h>
+	#include <stdio.h>
+	#include <stdlib.h>
 
-    #include <initguid.h>
+	#include <initguid.h>
 
-    #include <ntddk.h>
+	#include <ntddk.h>
 
-    #ifndef FAR
-    #define FAR
-    #endif
+	#ifndef FAR
+	#define FAR
+	#endif
 
-    #include <windef.h>
-    #include <winerror.h>
+	#include <windef.h>
+	#include <winerror.h>
 
-    #include <wingdi.h>
-    #include <stdarg.h>
+	#include <wingdi.h>
+	#include <stdarg.h>
 
-    #include <winddi.h>
-    #include <ntddvdeo.h>
+	#include <winddi.h>
+	#include <ntddvdeo.h>
 
-    #include <d3dkmddi.h>
-    #include <d3dkmthk.h>
+	#include <d3dkmddi.h>
+	#include <d3dkmthk.h>
 
-    #include <ntstrsafe.h>
-    #include <ntintsafe.h>
+	#include <ntstrsafe.h>
+	#include <ntintsafe.h>
 
-    #include <dispmprt.h>
+	#include <dispmprt.h>
 
-    #include <wdmguid.h>
+	#include <wdmguid.h>
 
-    #include "trace.h"
-    #include "osdep.h"
-    #include "virtio_pci.h"
-    #include "virtio.h"
-    #include "virtio_ring.h"
-    #include "kdebugprint.h"
-    #include "viogpu_pci.h"
-    #include "viogpu.h"
-    #include "viogpu_queue.h"
-    #include "viogpu_idr.h"
+	#include "trace.h"
+	#include "osdep.h"
+	#include "virtio_pci.h"
+	#include "virtio.h"
+	#include "virtio_ring.h"
+	#include "kdebugprint.h"
+	#include "viogpu_pci.h"
+	#include "viogpu.h"
+	#include "viogpu_queue.h"
+	#include "viogpu_idr.h"
 
 	#include <evntrace.h>
 }
@@ -107,11 +107,11 @@ extern VirtIOSystemOps VioGpuSystemOps;
 
 #define PAGED_CODE_SEG __declspec(code_seg("PAGE"))
 #define PAGED_CODE_SEG_BEGIN \
-    __pragma(code_seg(push)) \
-    __pragma(code_seg("PAGE"))
+	__pragma(code_seg(push)) \
+	__pragma(code_seg("PAGE"))
 
 #define PAGED_CODE_SEG_END \
-    __pragma(code_seg(pop))
+	__pragma(code_seg(pop))
 
 #define VioGpuDbgBreak() {}
 

@@ -5,15 +5,15 @@
 
 Module Name:
 
-    Tracing.cpp
+	Tracing.cpp
 
 Abstract:
 
-    This file contains the function tracing entry and exits.
+	This file contains the function tracing entry and exits.
 
 Environment:
 
-    Kernel-mode Driver Framework
+	Kernel-mode Driver Framework
 
 --*/
 #include "Driver.h"
@@ -34,8 +34,8 @@ Environment:
 ******************************************************************************/
 tracer::tracer(const char* func_name)
 {
-    FuncTrace(">>> %s\n", func_name);
-    m_func_name = (char*)func_name;
+	FuncTrace(">>> %s\n", func_name);
+	m_func_name = (char*)func_name;
 }
 /*******************************************************************************
 *
@@ -50,5 +50,5 @@ tracer::tracer(const char* func_name)
 ******************************************************************************/
 tracer::~tracer()
 {
-    FuncTrace("<<< %s\n", m_func_name);
+	FuncTrace("<<< %s\n", m_func_name);
 }
