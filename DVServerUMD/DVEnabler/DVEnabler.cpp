@@ -10,14 +10,16 @@
 
 
 #include "pch.h"
-#include "debug.h"
+#include "Trace.h"
+#include "DVEnabler.tmh"
 #include <Windows.h>
+
 
 int dvenabler_init()
 {
-	set_module_name("DVEnabler");
+	WPP_INIT_TRACING(NULL);
 	TRACING();
-
+	DBGPRINT("DVenabler init dve_event\n");
 	DISPLAYCONFIG_TARGET_BASE_TYPE baseType;
 	HANDLE hp_event = NULL;
 	HANDLE dve_event = NULL;
@@ -27,6 +29,7 @@ int dvenabler_init()
 	unsigned int path_count = NULL, mode_count = NULL;
 	bool found_id_path = FALSE, found_non_id_path = FALSE;
 	unsigned int prev_path_count = NULL;
+	bool update_prev_path_count = FALSE;
 	/* Initializing the baseType.baseOutputTechnology to default OS value(failcase) */
 	baseType.baseOutputTechnology = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER;
 
@@ -128,7 +131,11 @@ int dvenabler_init()
 			continue;
 		}
 
-		prev_path_count = path_count;
+		//In UMD, dve_event is set once during boot, So DVenabler will loop twice during boot,
+		// so dont update the previous path count during the first loop of boot.
+		if (update_prev_path_count) {
+			prev_path_count = path_count;
+		}
 
 		if (found_non_id_path && found_id_path) {
 			/* Step 5: SetDisplayConfig modifies the display topology by exclusively enabling/disabling the specified
@@ -163,10 +170,12 @@ int dvenabler_init()
 		//wait for arraival or departure call from UMD
 		WaitForSingleObject(dve_event, INFINITE);
 
+		update_prev_path_count = TRUE;
 		path_count = NULL, mode_count = NULL;
 		found_id_path = FALSE, found_non_id_path = FALSE;
 
 	}
+	WPP_CLEANUP();
 	CloseHandle(hp_event);
 	CloseHandle(dve_event);
 

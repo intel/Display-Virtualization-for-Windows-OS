@@ -19,6 +19,9 @@ use the below command to get the display port name for that particular board
 -----------------------------------------------------------
 1) Use the above QEMU cmd and boot to Windows VM
 2) Copy the Signed Zero Copy Binaries and Windows GFX driver to the VM
+3) If we are building driver manually from Visual Studio, then copy DVServer.cer & DVServerKMD.cer along with other drivers
+4) To install manual drivers, system requires "bcdedit /set testsigning on" & reboot before the installation
+5) Driver update may fail when switching from manual test signed driver to production driver. To fix this, we need to disable "Prioritize all digitally signed drivers equally during the driver ranking and selection process" in Group Policy (Path: Computer Configuration - Administrative Templates - System - Device Installation)
 
 -----------------------------------------------------------
 #####  Configuring 0Copy  #####
@@ -90,6 +93,7 @@ Create 3 folders and copy the contents as described below
 3.tracing /* create guid.txt*/
 
 Add the below content to guid.txt
+5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F;DVEnablerGuid
 351BC0B2-53AB-4C14-8851-3B80F878BADC;DVserverUMDGuid
 DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1;DVserverKMDGuid
 
