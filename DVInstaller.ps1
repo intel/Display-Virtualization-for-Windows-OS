@@ -85,6 +85,13 @@ if ($ret -eq "FAIL") {
 	Exit
 }
 else {
+	if ((is_present("DVServer.cer") -eq $true) -and
+	(is_present("DVServerKMD.cer") -eq $true)){
+		Write-Host "Start DVServer Certificate installation..."
+		certutil -addstore root DVServer.cer
+		certutil -addstore root DVServerKMD.cer
+	}
+	
 	Write-Host "Start Windows GFX Driver installation..."
 	pnputil.exe /add-driver .\GraphicsDriver\Graphics\iigd_dch.inf /install
 

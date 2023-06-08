@@ -736,7 +736,6 @@ void SwapChainProcessor::RunCore()
 			if (WaitResult == WAIT_OBJECT_0 || WaitResult == WAIT_TIMEOUT)
 			{
 				// We have a new buffer, so try the AcquireBuffer again
-				DBGPRINT("New buffer, so trying the AcquireBuffer again\n");
 				continue;
 			}
 			else if (WaitResult == WAIT_OBJECT_0 + 1)
@@ -1492,8 +1491,10 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	HANDLE dve_event = NULL;
 	DWORD waitstatus;
 	bool do_set_event = FALSE;
+	bool hpd_init = TRUE;
 	int status;
 	int count;
+	int boot_disp_count = 0;
 	hp_info hdata = { 0 };
 	static bool monitor_status[MAX_SCAN_OUT] = { 0 };
 	HANDLE devHandle = g_DevInfo->get_Handle();
@@ -1562,6 +1563,9 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 					else {
 						DBGPRINT("call finishinit for DISPLAY = %d\n", count);
 						pDeviceContextWrapper->pContext->FinishInit(count);
+						if (hpd_init) {
+							boot_disp_count++;
+						}
 					}
 					do_set_event = TRUE;
 				}
@@ -1570,13 +1574,16 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 				}
 			}
 
-			if (do_set_event) {
+			if ((do_set_event) && (boot_disp_count != 1)) {
 				status = SetEvent(dve_event);
 				if (status == NULL) {
 					ERR("Set dve-event failed during Display Arrival/departure with error [%d]\n ", GetLastError());
 				}
-				do_set_event = FALSE;
 			}
+			do_set_event = FALSE;
+			hpd_init = FALSE;
+			boot_disp_count = 0;
+
 		}
 		else {
 			ERR("HPD Wait was either cancelled or something unexpected happened");
