@@ -265,6 +265,9 @@ Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\DVServer.dll
 certmgr -del -c -n "DVServer" -s PrivateCertStore</Command>
     </PostBuildEvent>
+    <DriverSign>
+      <FileDigestAlgorithm>sha1</FileDigestAlgorithm>
+    </DriverSign>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -293,6 +296,9 @@ Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\DVServer.dll
 certmgr -del -c -n "DVServer" -s PrivateCertStore</Command>
     </PostBuildEvent>
+    <DriverSign>
+      <FileDigestAlgorithm>sha1</FileDigestAlgorithm>
+    </DriverSign>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM'">
     <ClCompile>

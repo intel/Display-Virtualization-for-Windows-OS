@@ -588,6 +588,11 @@ void SwapChainProcessor::cleanup_resources()
 		CloseHandle(m_GPUResourceMutex);
 	}
 
+	if ((m_destimage != NULL) && (m_Device != NULL)) {
+		m_Device->DeviceContext->Unmap(m_destimage, 0);
+		m_destimage->Release();
+	}
+
 #ifdef DVSERVER_HWDCURSOR
 	// ****** Cursor Resources ******
 	if (devHandle_cursor != INVALID_HANDLE_VALUE)
@@ -874,13 +879,13 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 			ERR("Failed Staging Buffer invalid configurations\n");
 			return DVSERVERUMD_FAILURE;
 		}
-	}
 
-	/* Create Texture2D with the staging descriptor parameters */
-	dvserver_device->Device->CreateTexture2D(&m_staging_desc, NULL, &m_destimage);
-	if (m_destimage == NULL) {
-		ERR("Failed Staging Buffer CreateTexture2D is NULL\n");
-		return DVSERVERUMD_FAILURE;
+		/* Create Texture2D with the staging descriptor parameters */
+		dvserver_device->Device->CreateTexture2D(&m_staging_desc, NULL, &m_destimage);
+		if (m_destimage == NULL) {
+			ERR("Failed Staging Buffer CreateTexture2D is NULL\n");
+			return DVSERVERUMD_FAILURE;
+		}
 	}
 
 	WaitForSingleObject(m_GPUResourceMutex, INFINITE);
@@ -948,8 +953,6 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 		return DVSERVERUMD_FAILURE;
 	}
 
-	dvserver_device->DeviceContext->Unmap(m_destimage, 0);
-	m_destimage->Release();
 	return DVSERVERUMD_SUCCESS;
 }
 
