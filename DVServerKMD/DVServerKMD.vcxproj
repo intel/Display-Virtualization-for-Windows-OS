@@ -110,6 +110,9 @@ Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timest
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\DVServerKMD.sys
 certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
     </PostBuildEvent>
+    <DriverSign>
+      <FileDigestAlgorithm>sha1</FileDigestAlgorithm>
+    </DriverSign>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -132,6 +135,9 @@ Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timest
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\DVServerKMD.sys
 certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
     </PostBuildEvent>
+    <DriverSign>
+      <FileDigestAlgorithm>sha1</FileDigestAlgorithm>
+    </DriverSign>
   </ItemDefinitionGroup>
   <ItemGroup>
     <FilesToPackage Include="$(TargetPath)" />
