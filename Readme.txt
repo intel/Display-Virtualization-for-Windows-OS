@@ -8,10 +8,15 @@
 -----------------------------------------------------------
 #####  Windows VM QEMU CMD Example #####
 -----------------------------------------------------------
+
+1) Direct QEMU command without "connectors" parameter (no association with external physical display)
+sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,sockets=1 -drive file=<WindowsOS.img>.img,format=qcow2,cache=none -device vfio-pci,host=0000:00:02.2 -device e1000,netdev=net0,mac=DE:AD:BE:EF:1C:00 -netdev tap,id=net0 -device virtio-vga,max_outputs=4,blob=true -display gtk,gl=on,full-screen=<on/off>, show-fps=on -object memory-backend-memfd,id=mem1,hugetlb=on,size=4096M -machine memory-backend=mem1
+
+2) Associate QEMU with External Physical Display: For this we need to use customized QEMU version with "connectors" parameter enabled
 sudo qemu-system-x86_64 -m 4096 -enable-kvm -cpu host -smp cores=4,threads=2,sockets=1 -drive file=<WindowsOS.img>.img,format=qcow2,cache=none -device vfio-pci,host=0000:00:02.2 -device e1000,netdev=net0,mac=DE:AD:BE:EF:1C:00 -netdev tap,id=net0 -device virtio-vga,max_outputs=4,blob=true -display gtk,gl=on,full-screen=<on/off>,connectors.0 = <display-port-name>, connectors.1=<display-port-name>, connectors.2=<display-port-name>, connectors.3=<display-port-name>, show-fps=on -object memory-backend-memfd,id=mem1,hugetlb=on,size=4096M -machine memory-backend=mem1
 
 Note:
-use the below command to get the display port name for that particular board
+use the below command to get the display port name for that particular board (for "connectors" parameter)
 “cat /sys/kernel/debug/dri/0/i915_display_info”
 
 -----------------------------------------------------------
