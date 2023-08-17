@@ -27,9 +27,12 @@
 #define REFRESH_RATE_59     59   //59Hz
 #define REFRESH_RATE_60     60   //60Hz
 #define ARRAY_SIZE(x) (sizeof(x)/sizeof((x)[0]))
+#define VGPU_BPP            32
+#define BYTE_ALIGN_16       16
 
 int get_total_screens(HANDLE devHandle);
 int get_edid_data(HANDLE devHandle, void* m, DWORD id);
 int is_blacklist(unsigned int width, unsigned int height);
+int is_samestride(unsigned int width);
 
 #endif /* __DVSERVER_EDID_H__ */
