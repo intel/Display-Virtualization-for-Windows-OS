@@ -47,8 +47,8 @@ function check_executables()
 		Write-Host "Setup files present"
 	}
 	else {
-		Write-Host "The following files needed for installation are missing:"
-		Write-Host ($missingFiles -join "`n")
+		Write-Host -ForegroundColor Red "The following files needed for installation are missing:"
+		Write-Host -ForegroundColor Yellow ($missingFiles -join "`n")
 		return "FAIL"
 	}
 }
@@ -63,8 +63,8 @@ function dvserver_cleanup()
 			}
 		}
 
-		Write-Host "Driver Installation failed.. "
-		Write-Host "Please Reboot the system and Run the Installation Script Again."
+		Write-Host -ForegroundColor Red "Driver Installation failed.. "
+		Write-Host -ForegroundColor Red "Please Reboot the system and Run the Installation Script Again."
 		Stop-Transcript
 
 		Exit
@@ -100,7 +100,7 @@ function start_dvenabler()
 		}
 	}
 	if (!$dve) {
-		Write-Host "unable to start DVEnabler... returning failure"
+		Write-Host -ForegroundColor Red "unable to start DVEnabler... returning failure"
 		return "FAIL"
 	}
 
@@ -108,9 +108,6 @@ function start_dvenabler()
 	#This will load the previously saved display topology.
 	#Copying DVEnabler.DLL to system32 is required as part of the installation
 	cp DVEnabler.dll C:\Windows\System32
-
-	#Resgister the DVEnabler task during workstation lock and unlock
-	Register_ScheduledTask
 
 	return "SUCCESS"
 }
@@ -133,19 +130,25 @@ function Register_ScheduledTask()
 	unregister-scheduledtask -TaskName "DVEnabler" -confirm:$false -ErrorAction SilentlyContinue
 	unregister-scheduledtask -TaskName "StopDVEnabler" -confirm:$false -ErrorAction SilentlyContinue
 
-	#Register a task to start the dvenabler.dll as a service during every user logon or user unlock
-		$ac = New-ScheduledTaskAction -Execute "rundll32.exe"  -Argument "C:\Windows\System32\DVEnabler.dll,dvenabler_init"
-		$tr = New-ScheduledTaskTrigger -AtLogOn
-		$pr = New-ScheduledTaskPrincipal  -Groupid  "INTERACTIVE" -RunLevel Highest
-		$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -ExecutionTimeLimit 0 -MultipleInstances Queue
-	Register-ScheduledTask -TaskName "DVEnabler" -Trigger @($tr, $onUnlockTrigger) -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr -Settings $settings
+	try {
+		#Register a task to start the dvenabler.dll as a service during every user logon or user unlock
+			$ac = New-ScheduledTaskAction -Execute "rundll32.exe"  -Argument "C:\Windows\System32\DVEnabler.dll,dvenabler_init"
+			$tr = New-ScheduledTaskTrigger -AtLogOn
+			# Use the SID for INTERACTIVE group
+			$interactiveSID = "S-1-5-4"
+			$pr = New-ScheduledTaskPrincipal  -Groupid  $interactiveSID -RunLevel Highest
+			$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -ExecutionTimeLimit 0 -MultipleInstances Queue
+		Register-ScheduledTask -TaskName "DVEnabler" -Trigger @($tr, $onUnlockTrigger) -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr -Settings $settings -ErrorAction Stop
 
-	#Register a task to Stop the dvenabler.dll during every user lock
-		$ac = New-ScheduledTaskAction -Execute "powershell.exe"  -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -Command `"Stop-ScheduledTask -TaskName '\Microsoft\Windows\DVEnabler\DvEnabler'`""
-		$pr = New-ScheduledTaskPrincipal  -Groupid  "INTERACTIVE" -RunLevel Highest
-		$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -ExecutionTimeLimit 0 -MultipleInstances Queue
-	Register-ScheduledTask -TaskName "StopDVEnabler" -Trigger $onLockTrigger -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr -Settings $settings
-
+		#Register a task to Stop the dvenabler.dll during every user lock
+			$ac = New-ScheduledTaskAction -Execute "powershell.exe"  -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -Command `"Stop-ScheduledTask -TaskName '\Microsoft\Windows\DVEnabler\DvEnabler'`""
+			$pr = New-ScheduledTaskPrincipal  -Groupid  $interactiveSID -RunLevel Highest
+			$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -ExecutionTimeLimit 0 -MultipleInstances Queue
+		Register-ScheduledTask -TaskName "StopDVEnabler" -Trigger $onLockTrigger -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr -Settings $settings -ErrorAction Stop
+	} catch {
+		Write-Host -ForegroundColor Red "An error occurred in Register-ScheduledTask: $($_.Exception.Message)"
+		return "FAIL"
+	}
 	return "SUCCESS"
 
 }
@@ -210,7 +213,7 @@ else {
 	}
 
 	if (!$dvs) {
-		Write-Host "Failed to load DVServer UMD..."
+		Write-Host -ForegroundColor Red "Failed to load DVServer UMD..."
 		dvserver_cleanup
 	}
 
@@ -218,11 +221,8 @@ else {
 	$dve = start_dvenabler
 	if ($dve -eq "SUCCESS") {
 		Write-Host "Dvenabler successfully  started...."
-		Write-Host "Rebooting Windows VM..."
-		Stop-Transcript
-		Restart-Computer
 	} else {
-		Write-Host "Failed to start DVEnabler...."
+		Write-Host -ForegroundColor Red "Failed to start DVEnabler...."
 
 		#Before cleanup, make IDD as primary monitor , so that the user can see the PowerShell window
 
@@ -238,5 +238,16 @@ else {
 
 		dvserver_cleanup
 	}
+	#Resgister the DVEnabler task during workstation lock and unlock
+	$status = Register_ScheduledTask
+	if ( $status -eq "FAIL") {
+		Write-Host -ForegroundColor Red "Failed to register the scheduled task."
+		Write-Host -ForegroundColor Red "Note: MULTI MONITOR and HOTPLUG features won't work until the task is successfully registered."
+		Exit
+	}
+	Write-Host -ForegroundColor Green "INSTALLATION COMPLETED SUCCESSFULLY"
+	Write-Host "Rebooting Windows VM..."
+	Stop-Transcript
+	Restart-Computer
 
 }
