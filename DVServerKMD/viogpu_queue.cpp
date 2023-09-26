@@ -212,6 +212,10 @@ BOOLEAN CtrlQueue::AskDisplayInfo(PGPU_VBUFFER* buf, KEVENT* event)
 	}
 
 	cmd = (PGPU_CTRL_HDR)AllocCmdResp(&vbuf, sizeof(GPU_CTRL_HDR), resp_buf, sizeof(GPU_RESP_DISP_INFO));
+	if (!cmd) {
+		ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+		return FALSE;
+	}
 	RtlZeroMemory(cmd, sizeof(GPU_CTRL_HDR));
 
 	cmd->type = VIRTIO_GPU_CMD_GET_DISPLAY_INFO;
@@ -259,6 +263,10 @@ BOOLEAN CtrlQueue::AskEdidInfo(PGPU_VBUFFER* buf, UINT id, KEVENT* event)
 		return FALSE;
 	}
 	cmd = (PGPU_CMD_GET_EDID)AllocCmdResp(&vbuf, sizeof(GPU_CMD_GET_EDID), resp_buf, sizeof(GPU_RESP_EDID));
+	if (!cmd) {
+		ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+		return FALSE;
+	}
 	RtlZeroMemory(cmd, sizeof(GPU_CMD_GET_EDID));
 
 	cmd->hdr.type = VIRTIO_GPU_CMD_GET_EDID;
@@ -401,6 +409,10 @@ void CtrlQueue::InvalBacking(UINT res_id)
 	PGPU_RES_DETACH_BACKING cmd;
 	PGPU_VBUFFER vbuf;
 	cmd = (PGPU_RES_DETACH_BACKING)AllocCmd(&vbuf, sizeof(*cmd));
+	if (!cmd) {
+		ERR("Couldn't allocate %ld bytes of memory\n", sizeof(*cmd));
+		return;
+	}
 	RtlZeroMemory(cmd, sizeof(*cmd));
 
 	cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_DETACH_BACKING;
@@ -697,8 +709,20 @@ BOOLEAN VioGpuBuf::Init(_In_ UINT cnt)
 			KeReleaseSpinLock(&m_SpinLock, OldIrql);
 		}
 	}
-	ASSERT(m_uCount == cnt);
-
+	if (m_uCount != cnt) {
+		/*Before assert, Free the allocated system memory as the requested quantity is not satisfied in entirety */
+		KeAcquireSpinLock(&m_SpinLock, &OldIrql);
+		while (!IsListEmpty(&m_FreeBufs))
+		{
+			LIST_ENTRY* pListItem = RemoveHeadList(&m_FreeBufs);
+			if (pListItem) {
+				PGPU_VBUFFER pvbuf = CONTAINING_RECORD(pListItem, GPU_VBUFFER, list_entry);
+				delete[] reinterpret_cast<PBYTE>(pvbuf);
+			}
+		}
+		KeReleaseSpinLock(&m_SpinLock, OldIrql);
+		ASSERT(m_uCount == cnt);
+	}
 	return (m_uCount > 0);
 }
 
@@ -877,6 +901,7 @@ VioGpuMemSegment::VioGpuMemSegment(void)
 	m_bSystemMemory = FALSE;
 	m_bUserMemory = FALSE;
 	m_bMapped = FALSE;
+	m_Size = 0;
 }
 
 VioGpuMemSegment::~VioGpuMemSegment(void)
@@ -1064,7 +1089,7 @@ void VioGpuMemSegment::Close(void)
 
 	if (!m_bUserMemory) {
 		if (m_bSystemMemory) {
-			delete[] m_pVAddr;
+			delete[] static_cast<BYTE*>(m_pVAddr);
 		}
 		else if (m_pVAddr) {
 			UnmapFrameBuffer(m_pVAddr, (ULONG)m_Size);
@@ -1088,6 +1113,7 @@ VioGpuObj::VioGpuObj(void)
 
 	m_uiHwRes = 0;
 	m_pSegment = NULL;
+	m_Size = 0;
 }
 
 VioGpuObj::~VioGpuObj(void)

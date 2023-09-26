@@ -40,6 +40,7 @@ UINT g_DevInfoCounter = 0;
 BOOL g_init_kmd_resources = TRUE;
 struct hp_info* g_hdata = NULL;
 ULONG g_bytesReturned = 0;
+HANDLE g_hpdthread_handle = NULL;
 
 IDDCX_MONITOR g_monitorobject_list[MAX_SCAN_OUT] = { 0 };
 
@@ -122,6 +123,7 @@ extern "C" DRIVER_INITIALIZE DriverEntry;
 
 EVT_WDF_DRIVER_DEVICE_ADD DVServerUMDDeviceAdd;
 EVT_WDF_DEVICE_D0_ENTRY DVServerUMDDeviceD0Entry;
+EVT_WDF_DEVICE_D0_EXIT DVServerUMDDeviceD0Exit;
 EVT_WDF_DRIVER_UNLOAD DVServerUMDUnload;
 
 EVT_IDD_CX_ADAPTER_INIT_FINISHED DVServerUMDAdapterInitFinished;
@@ -241,9 +243,10 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	UNREFERENCED_PARAMETER(Driver);
 	TRACING();
 
-	// Register for power callbacks - in this sample only power-on is needed
+	// Register for power callbacks
 	WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&PnpPowerCallbacks);
 	PnpPowerCallbacks.EvtDeviceD0Entry = DVServerUMDDeviceD0Entry;
+	PnpPowerCallbacks.EvtDeviceD0Exit = DVServerUMDDeviceD0Exit;
 	WdfDeviceInitSetPnpPowerEventCallbacks(pDeviceInit, &PnpPowerCallbacks);
 
 	IDD_CX_CLIENT_CONFIG DVServerConfig;
@@ -297,12 +300,18 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	g_DevInfo = new DeviceInfo();
 
 	dvserver_monitor_count = get_total_screens(g_DevInfo->get_Handle());
-	if (dvserver_monitor_count == DVSERVERUMD_FAILURE) {
+	if ((dvserver_monitor_count == DVSERVERUMD_FAILURE) || \
+		(dvserver_monitor_count > MAX_MONITOR_SUPPORTED)) {
 		ERR("Failed to get total screens from KMD");
 		return DVSERVERUMD_FAILURE;
 	}
 
-	g_monitors = new IndirectSampleMonitor[dvserver_monitor_count];
+	try {
+		g_monitors = new IndirectSampleMonitor[dvserver_monitor_count];
+	} catch(const std::bad_alloc e){
+		ERR("Dynamic memory allocation failure");
+		return DVSERVERUMD_FAILURE;
+	}
 	for (count = 0; count < dvserver_monitor_count; count++) {
 		if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count) == DVSERVERUMD_FAILURE) {
 			ERR("Failed to get EDID from QEMU");
@@ -322,8 +331,34 @@ NTSTATUS DVServerUMDDeviceD0Entry(WDFDEVICE Device, WDF_POWER_DEVICE_STATE Previ
 	// This function is called by WDF to start the device in the fully-on power state.
 
 	auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
-	pContext->pContext->InitAdapter();
+	pContext->pContext->InitAdapter(PreviousState);
 
+	return STATUS_SUCCESS;
+}
+
+NTSTATUS DVServerUMDDeviceD0Exit(WDFDEVICE Device, WDF_POWER_DEVICE_STATE TargetState)
+{
+	UNREFERENCED_PARAMETER(Device);
+	DBGPRINT("TargetState = %d", TargetState);
+	HANDLE hp_event = NULL;
+	TRACING();
+
+	hp_event = OpenEvent(EVENT_MODIFY_STATE, FALSE, HOTPLUG_TERMINATE_EVENT);
+	if (hp_event == NULL) {
+		ERR("Error opening named event. Error code: %d\n", GetLastError());
+		return 1;
+	}
+
+	// Signal the HPD thread using the D3 callback to gracefully exit from the HPD thread
+	int status = SetEvent(hp_event);
+	if (status == NULL) {
+		ERR(" Set HPevent failed with error [%d]\n ", GetLastError());
+	}
+
+	if (g_hpdthread_handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(g_hpdthread_handle);
+	}
+	CloseHandle(hp_event);
 	return STATUS_SUCCESS;
 }
 
@@ -475,7 +510,6 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 	TRACING();
 
 	m_hTerminateEvent.Attach(CreateEvent(nullptr, FALSE, FALSE, nullptr));
-
 
 	//Allocate memory for IOCTL Response Buffer from DVServerKMD (for frame)
 	m_ioctlresp_frame = (struct KMDF_IOCTL_Response*)malloc(sizeof(struct KMDF_IOCTL_Response));
@@ -846,6 +880,7 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 		DBGPRINT("ResolutionChanged, setting up new staging buffer\n");
 		ZeroMemory(&m_staging_buffer, sizeof(D3D11_MAPPED_SUBRESOURCE));
 		ZeroMemory(&m_staging_desc, sizeof(m_staging_desc));
+		ZeroMemory(&m_input_desc, sizeof(m_input_desc));
 
 		desktopimage->GetDesc(&m_input_desc);
 		m_width = m_input_desc.Width;
@@ -1055,7 +1090,7 @@ IndirectDeviceContext::~IndirectDeviceContext()
 {
 }
 
-void IndirectDeviceContext::InitAdapter()
+void IndirectDeviceContext::InitAdapter(WDF_POWER_DEVICE_STATE PreviousState)
 {
 	// ==============================
 	// TODO: Update the below diagnostic information in accordance with the target hardware. The strings and version
@@ -1065,51 +1100,62 @@ void IndirectDeviceContext::InitAdapter()
 	// ==============================
 
 	TRACING();
-	IDDCX_ADAPTER_CAPS AdapterCaps = {};
-	AdapterCaps.Size = sizeof(AdapterCaps);
+	DBGPRINT("System entry happens from state %d", PreviousState);
 
-	//This flag enables IDD Display to change the resolution
-	AdapterCaps.Flags = IDDCX_ADAPTER_FLAGS_USE_SMALLEST_MODE;
+	if (PreviousState != WdfPowerDeviceD3) {
+		IDDCX_ADAPTER_CAPS AdapterCaps = {};
+		AdapterCaps.Size = sizeof(AdapterCaps);
 
-	// Declare basic feature support for the adapter (required)
-	AdapterCaps.MaxMonitorsSupported = dvserver_monitor_count;
-	AdapterCaps.EndPointDiagnostics.Size = sizeof(AdapterCaps.EndPointDiagnostics);
-	AdapterCaps.EndPointDiagnostics.GammaSupport = IDDCX_FEATURE_IMPLEMENTATION_NONE;
-	AdapterCaps.EndPointDiagnostics.TransmissionType = IDDCX_TRANSMISSION_TYPE_WIRED_OTHER;
+		//This flag enables IDD Display to change the resolution
+		AdapterCaps.Flags = IDDCX_ADAPTER_FLAGS_USE_SMALLEST_MODE;
 
-	// Declare your device strings for telemetry (required)
-	AdapterCaps.EndPointDiagnostics.pEndPointFriendlyName = L"DVServerUMD Device";
-	AdapterCaps.EndPointDiagnostics.pEndPointManufacturerName = L"Intel";
-	AdapterCaps.EndPointDiagnostics.pEndPointModelName = L"DVServerUMD Model";
+		// Declare basic feature support for the adapter (required)
+		AdapterCaps.MaxMonitorsSupported = dvserver_monitor_count;
+		AdapterCaps.EndPointDiagnostics.Size = sizeof(AdapterCaps.EndPointDiagnostics);
+		AdapterCaps.EndPointDiagnostics.GammaSupport = IDDCX_FEATURE_IMPLEMENTATION_NONE;
+		AdapterCaps.EndPointDiagnostics.TransmissionType = IDDCX_TRANSMISSION_TYPE_WIRED_OTHER;
 
-	// Declare your hardware and firmware versions (required)
-	IDDCX_ENDPOINT_VERSION Version = {};
-	Version.Size = sizeof(Version);
-	Version.MajorVer = 1;
-	AdapterCaps.EndPointDiagnostics.pFirmwareVersion = &Version;
-	AdapterCaps.EndPointDiagnostics.pHardwareVersion = &Version;
+		// Declare your device strings for telemetry (required)
+		AdapterCaps.EndPointDiagnostics.pEndPointFriendlyName = L"DVServerUMD Device";
+		AdapterCaps.EndPointDiagnostics.pEndPointManufacturerName = L"Intel";
+		AdapterCaps.EndPointDiagnostics.pEndPointModelName = L"DVServerUMD Model";
 
-	// Initialize a WDF context that can store a pointer to the device context object
-	WDF_OBJECT_ATTRIBUTES Attr;
-	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectDeviceContextWrapper);
+		// Declare your hardware and firmware versions (required)
+		IDDCX_ENDPOINT_VERSION Version = {};
+		Version.Size = sizeof(Version);
+		Version.MajorVer = 1;
+		AdapterCaps.EndPointDiagnostics.pFirmwareVersion = &Version;
+		AdapterCaps.EndPointDiagnostics.pHardwareVersion = &Version;
 
-	IDARG_IN_ADAPTER_INIT AdapterInit = {};
-	AdapterInit.WdfDevice = m_WdfDevice;
-	AdapterInit.pCaps = &AdapterCaps;
-	AdapterInit.ObjectAttributes = &Attr;
+		// Initialize a WDF context that can store a pointer to the device context object
+		WDF_OBJECT_ATTRIBUTES Attr;
+		WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectDeviceContextWrapper);
 
-	// Start the initialization of the adapter, which will trigger the AdapterFinishInit callback later
-	IDARG_OUT_ADAPTER_INIT AdapterInitOut;
-	NTSTATUS Status = IddCxAdapterInitAsync(&AdapterInit, &AdapterInitOut);
+		IDARG_IN_ADAPTER_INIT AdapterInit = {};
+		AdapterInit.WdfDevice = m_WdfDevice;
+		AdapterInit.pCaps = &AdapterCaps;
+		AdapterInit.ObjectAttributes = &Attr;
 
-	if (NT_SUCCESS(Status))
-	{
-		// Store a reference to the WDF adapter handle
-		m_Adapter = AdapterInitOut.AdapterObject;
+		// Start the initialization of the adapter, which will trigger the AdapterFinishInit callback later
+		IDARG_OUT_ADAPTER_INIT AdapterInitOut;
+		NTSTATUS Status = IddCxAdapterInitAsync(&AdapterInit, &AdapterInitOut);
 
-		// Store the device context object into the WDF object context
-		auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(AdapterInitOut.AdapterObject);
-		pContext->pContext = this;
+		if (NT_SUCCESS(Status)) {
+			// Store a reference to the WDF adapter handle
+			m_Adapter = AdapterInitOut.AdapterObject;
+
+			// Store the device context object into the WDF object context
+			auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(AdapterInitOut.AdapterObject);
+			pContext->pContext = this;
+		}
+	}
+	else {
+		// Create the HPD thread if the system boots from WdfPowerDeviceD3
+		g_hpdthread_handle = CreateThread(nullptr, 0, IndirectDeviceContext::HPDThread, m_Adapter, 0, nullptr);
+		if (g_hpdthread_handle == NULL) {
+			ERR("Failed to create HPD Thread");
+		}
+
 	}
 }
 
@@ -1300,11 +1346,12 @@ NTSTATUS DVServerUMDAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
 {
 	// This is called when the OS has finished setting up the adapter for use by the IddCx driver. It's now possible
 	// to report attached monitors.
-	auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
-	if (NT_SUCCESS(pInArgs->AdapterInitStatus))
-	{
-		pDeviceContextWrapper->pContext->FinishInit(PRIMARY_IDD_INDEX);
-		CreateThread(nullptr, 0, IndirectDeviceContext::HPDThread, AdapterObject, 0, nullptr);
+	if (NT_SUCCESS(pInArgs->AdapterInitStatus)) {
+		g_hpdthread_handle = CreateThread(nullptr, 0, IndirectDeviceContext::HPDThread, AdapterObject, 0, nullptr);
+		if (g_hpdthread_handle == NULL) {
+			ERR("Failed to Create HPD thread");
+			return STATUS_UNSUCCESSFUL;
+		}
 	}
 
 	return STATUS_SUCCESS;
@@ -1492,12 +1539,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 
 	HANDLE hp_event = NULL;
 	HANDLE dve_event = NULL;
+	HANDLE hp_terminate_event = NULL;
 	DWORD waitstatus;
 	bool do_set_event = FALSE;
-	bool hpd_init = TRUE;
 	int status;
 	int count;
-	int boot_disp_count = 0;
+	disp_info dinfo = { 0 };
 	hp_info hdata = { 0 };
 	static bool monitor_status[MAX_SCAN_OUT] = { 0 };
 	HANDLE devHandle = g_DevInfo->get_Handle();
@@ -1520,6 +1567,13 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	}
 	hdata.event = hp_event;
 
+	hp_terminate_event = CreateEvent(&hp_sa, FALSE, FALSE, HOTPLUG_TERMINATE_EVENT);
+	if (NULL == hp_terminate_event) {
+		ERR("Cannot create HOTPULG event!\n");
+		CloseHandle(hp_event);
+		return DVSERVERUMD_FAILURE;
+	}
+
 	//Create Security Descriptor for DVE_EVENT, To allow the user application(DVenabler) to access the event
 	PSECURITY_DESCRIPTOR dve_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
 	InitializeSecurityDescriptor(dve_psd, SECURITY_DESCRIPTOR_REVISION);
@@ -1534,8 +1588,66 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	if (NULL == dve_event) {
 		ERR("Cannot create DVE event!\n");
 		CloseHandle(hp_event);
+		CloseHandle(hp_terminate_event);
 		return DVSERVERUMD_FAILURE;
 	}
+
+	SECURITY_ATTRIBUTES secAttr;
+	SECURITY_DESCRIPTOR secDesc;
+	// Create a security descriptor with desired permissions
+	InitializeSecurityDescriptor(&secDesc, SECURITY_DESCRIPTOR_REVISION);
+	SetSecurityDescriptorDacl(&secDesc, TRUE, NULL, FALSE);
+	secAttr.nLength = sizeof(secAttr);
+	secAttr.bInheritHandle = FALSE;
+	secAttr.lpSecurityDescriptor = &secDesc;
+
+	// Create the shared memory section
+	HANDLE hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, &secAttr, PAGE_READWRITE, 0, sizeof(struct disp_info), DISP_INFO);
+
+	if (hSharedMem == NULL) {
+		ERR("Failed to create shared memory section (%d)\n", GetLastError());
+		CloseHandle(dve_event);
+		CloseHandle(hp_event);
+		CloseHandle(hp_terminate_event);
+		return DVSERVERUMD_FAILURE;
+	}
+
+	ERR("Shared memory section created successfully\n");
+
+	struct disp_info* pSharedMem = (struct disp_info*)MapViewOfFile(
+		hSharedMem,          // Handle to the shared memory section
+		FILE_MAP_ALL_ACCESS, // Read/write access
+		0,                   // File offset - high-order DWORD
+		0,                   // File offset - low-order DWORD
+		0);                  // Mapping size (0 means to map the entire section)
+
+	if (pSharedMem == NULL) {
+		ERR(L"Failed to map view of shared memory section (%d)\n", GetLastError());
+		CloseHandle(hp_event);
+		CloseHandle(hp_terminate_event);
+		CloseHandle(dve_event);
+		CloseHandle(hSharedMem);
+		return DVSERVERUMD_FAILURE;
+	}
+
+	pSharedMem->mutex = CreateMutex(&secAttr, FALSE, NULL);
+	if (pSharedMem->mutex == NULL) {
+		ERR(L"Failed to create mutex for shared memeory (%d)\n", GetLastError());
+		UnmapViewOfFile(pSharedMem);
+		CloseHandle(hSharedMem);
+		CloseHandle(hp_event);
+		CloseHandle(hp_terminate_event);
+		CloseHandle(dve_event);
+		return DVSERVERUMD_FAILURE;
+	}
+
+	pDeviceContextWrapper->pContext->FinishInit(PRIMARY_IDD_INDEX);
+
+	// Default IDD monitor will be enabled at this time. so setting disp_count to 1 and reseting the Dvenabler_exit flag
+	WaitForSingleObject(pSharedMem->mutex, INFINITE);
+	pSharedMem->exit_dvenabler = FALSE;
+	pSharedMem->disp_count = 1;
+	ReleaseMutex(pSharedMem->mutex);
 
 	// Doing this set event to avoid dead lock during UMD driver reset.
 	status = SetEvent(dve_event);
@@ -1543,10 +1655,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		ERR("Set dve-event failed during first display arrival with error [%d]\n ", GetLastError());
 	}
 
+	HANDLE hp_handles[] = { hp_event , hp_terminate_event };
+
 	while (1) {
 		//After user login, first time DVenabler will set this event to enable the HPD Path.
 		//KMD will set this for every HP interrupt recieved from QEMU.
-		waitstatus = WaitForSingleObject(hp_event, INFINITE);
+		waitstatus = WaitForMultipleObjects(ARRAYSIZE(hp_handles), hp_handles, FALSE, INFINITE);
 		if (waitstatus == WAIT_OBJECT_0) {
 			hdata.screen_present[3] = { 0 };
 			if (get_hpd_data(devHandle, &hdata) != DVSERVERUMD_SUCCESS) {
@@ -1562,13 +1676,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 						DBGPRINT("call depature for DISPLAY = %d\n", count);
 						IddCxMonitorDeparture(g_monitorobject_list[count]);
 						g_monitorobject_list[count] = NULL;
+						dinfo.disp_count--;
 					}
 					else {
 						DBGPRINT("call finishinit for DISPLAY = %d\n", count);
 						pDeviceContextWrapper->pContext->FinishInit(count);
-						if (hpd_init) {
-							boot_disp_count++;
-						}
+						dinfo.disp_count++;
 					}
 					do_set_event = TRUE;
 				}
@@ -1577,24 +1690,58 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 				}
 			}
 
-			if ((do_set_event) && (boot_disp_count != 1)) {
+			if ((do_set_event)) {
+				ERR("disp_count = %d", dinfo.disp_count);
+				WaitForSingleObject(pSharedMem->mutex, INFINITE);
+				pSharedMem->disp_count = dinfo.disp_count;
+				ReleaseMutex(pSharedMem->mutex);
 				status = SetEvent(dve_event);
 				if (status == NULL) {
 					ERR("Set dve-event failed during Display Arrival/departure with error [%d]\n ", GetLastError());
 				}
 			}
 			do_set_event = FALSE;
-			hpd_init = FALSE;
-			boot_disp_count = 0;
 
+		}
+		else if (waitstatus == WAIT_OBJECT_0 + 1) {
+			DBGPRINT("UMD is entering D3 state so kill the HPD thread");
+			WaitForSingleObject(pSharedMem->mutex, INFINITE);
+			pSharedMem->exit_dvenabler = TRUE;
+			ReleaseMutex(pSharedMem->mutex);
+
+			status = SetEvent(dve_event);
+			if (status == NULL) {
+				ERR("Set dve-event failed during Display Arrival/departure with error [%d]\n ", GetLastError());
+			}
+			break;
 		}
 		else {
 			ERR("HPD Wait was either cancelled or something unexpected happened");
 			break;
 		}
 	}
+
+	for (count = 0; count < MAX_SCAN_OUT; count++) {
+		if (hdata.screen_present[count]) {
+			DBGPRINT("Call departure for display %d from exit", count);
+			monitor_status[count] = FALSE;
+			IddCxMonitorDeparture(g_monitorobject_list[count]);
+			g_monitorobject_list[count] = NULL;
+		}
+	}
+
+	//before exiting wait for DVEnabler to get unloaded
+	WaitForSingleObject(hp_event, WAIT_DELAY);
+	status = ResetEvent(hp_event);
+	if (!status) {
+		ERR("manual reset failed During HPD Exit ");
+	}
+
+	UnmapViewOfFile(pSharedMem);
+	CloseHandle(hSharedMem);
 	CloseHandle(hp_event);
 	CloseHandle(dve_event);
+	CloseHandle(hp_terminate_event);
 	return DVSERVERUMD_SUCCESS;
 }
 

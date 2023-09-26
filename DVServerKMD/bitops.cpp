@@ -13,6 +13,7 @@ GetPitches(
 	_Out_ LONG* pRowPitch
 )
 {
+	TRACING();
 	switch (pBltInfo->Rotation) {
 	case D3DKMDT_VPPR_IDENTITY:
 		*pPixelPitch = (pBltInfo->BitsPerPel / BITS_PER_BYTE);
@@ -41,6 +42,7 @@ GetPitches(
 
 BYTE* GetRowStart(_In_ CONST BLT_INFO* pBltInfo, CONST RECT* pRect)
 {
+	TRACING();
 	BYTE* pRet = NULL;
 	LONG OffLeft = pRect->left + pBltInfo->Offset.x;
 	LONG OffTop = pRect->top + pBltInfo->Offset.y;
@@ -82,6 +84,7 @@ VOID CopyBitsGeneric(
 	UINT  NumRects,
 	_In_reads_(NumRects) CONST RECT* pRects)
 {
+	TRACING();
 	LONG DstPixelPitch = 0;
 	LONG DstRowPitch = 0;
 	LONG SrcPixelPitch = 0;
@@ -191,6 +194,7 @@ VOID BltBits(
 
 UINT BPPFromPixelFormat(D3DDDIFORMAT Format)
 {
+	TRACING();
 	switch (Format)
 	{
 	case D3DDDIFMT_UNKNOWN: return 0;

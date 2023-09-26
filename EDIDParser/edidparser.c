@@ -146,9 +146,11 @@ void get_cea_modes(unsigned char* edid_data, struct output_modelist* kmd_modelis
 			video_block_end = video_block_start_index + video_block_length;
 
 			for (i = video_block_start_index + 1; i <= video_block_end; i++) {
-				vic_number = edid_data[i];
-				// VIC
-				vic_number = vic_number & EDID_MASK(0x1);
+				// for VICs 1-64, only 7-bits are used.
+				vic_number = edid_data[i] & EDID_MASK(0x1);
+				if (vic_number > 64) {
+					vic_number = edid_data[i];
+				}
 				// VIC Number from 1 to 127
 				if (vic_number <= CEA_MODELIST_FIRST_BLOCK) {
 					kmd_modelist->modelist[kmd_modelist->modelist_size].width

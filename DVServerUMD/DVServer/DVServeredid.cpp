@@ -39,18 +39,18 @@ char* screenedid[MAX_SCAN_OUT] = { "ScreenEDID1", "ScreenEDID2", "ScreenEDID3", 
 int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 {
 	TRACING();
-	unsigned int i = 0, edid_mode_index = 0;
 	IndirectSampleMonitor* monitor = (IndirectSampleMonitor*)m;
+	wchar_t* Lscreenedid;
+	BYTE regedid[EDID_SIZE] = { 0 };
+	ULONG buff_size = EDID_SIZE;
+	unsigned int i = 0, edid_mode_index = 0, modeSize;
+	size_t requiredSize = 0;
+	int status = 0;
 
-	if (!m) {
+	if (!devHandle || !m) {
 		ERR("Invalid parameter\n");
 		return DVSERVERUMD_FAILURE;
 	}
-
-	BYTE regedid[EDID_SIZE] = { 0 };
-	ULONG buff_size = EDID_SIZE;
-	size_t requiredSize = 0;
-	int status = 0;
 
 	edata = (struct edid_info*)malloc(sizeof(struct edid_info));
 	if (edata == NULL) {
@@ -66,6 +66,17 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 		free(edata);
 		return DVSERVERUMD_FAILURE;
 	}
+	if (edata->mode_size > MODE_LIST_MAX_SIZE) {
+		ERR("Invalid id \n");
+		free(edata);
+		return DVSERVERUMD_FAILURE;
+	}
+
+	/*Resetting the edata buffer for coverity*/
+	modeSize = edata->mode_size;
+	SecureZeroMemory(edata, sizeof(struct edid_info));
+	edata->screen_num = id;
+	edata->mode_size = modeSize;
 
 	edata->mode_list = (struct mode_info*)malloc(sizeof(struct mode_info) * edata->mode_size);
 	if (edata->mode_list == NULL) {
@@ -82,8 +93,23 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 		free(edata);
 		return DVSERVERUMD_FAILURE;
 	}
+	/*Rechecking for possible out of range */
+	if (edata->mode_size > MODE_LIST_MAX_SIZE) {
+		ERR("mode list is corrupted \n");
+		free(edata->mode_list);
+		free(edata);
+		return DVSERVERUMD_FAILURE;
+	}
 
-	wchar_t* Lscreenedid = new wchar_t[strlen(screenedid[id]) + 1];
+	try {
+		Lscreenedid = new wchar_t[strlen(screenedid[id]) + 1];
+	}
+	catch (const std::bad_alloc e) {
+		ERR("Mode list size is Modified \n");
+		free(edata->mode_list);
+		free(edata);
+		return DVSERVERUMD_FAILURE;
+	}
 	mbstowcs_s(&requiredSize, Lscreenedid, strlen(screenedid[id]) + 1, screenedid[id], strlen(screenedid[id]));
 	if (requiredSize != 0) {
 		DBGPRINT("Screen EDID regkey = %ls", Lscreenedid);
@@ -93,8 +119,7 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 			DBGPRINT("idd_read_registry_binary Failed, EDID received from KMD will be used");
 			write_dvserver_registry_binary(Lscreenedid, edata->edid_data, EDID_SIZE);
 			memcpy_s(monitor->pEdidBlock, monitor->szEdidBlock, edata->edid_data, monitor->szEdidBlock);
-		}
-		else {
+		} else {
 			DBGPRINT("idd_read_registry_binary Passed, EDID from local registry will be used");
 			memcpy_s(monitor->pEdidBlock, monitor->szEdidBlock, regedid, monitor->szEdidBlock);
 		}

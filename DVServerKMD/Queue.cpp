@@ -448,6 +448,7 @@ static NTSTATUS IoctlRequestEdid(
 	UNREFERENCED_PARAMETER(BytesReturned);
 	TRACING();
 
+	VioGpuAdapterLite* pAdapter;
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
 	struct edid_info* edata = NULL;
 	size_t bufSize;
@@ -455,14 +456,12 @@ static NTSTATUS IoctlRequestEdid(
 	if (DeviceContext == NULL) {
 		ERR("Invalid Device Context\n");
 		return status;
-	}
-
-	VioGpuAdapterLite* pAdapter =
-		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
-
-	if (!pAdapter) {
-		ERR("Coudlnt' find adapter\n");
-		return status;
+	} else {
+		pAdapter = (VioGpuAdapterLite*)DeviceContext->pvDeviceExtension;
+		if (!pAdapter) {
+			ERR("Coudlnt' find adapter\n");
+			return status;
+		}
 	}
 
 	status = WdfRequestRetrieveInputBuffer(Request, 0, (PVOID*)&edata, &bufSize);
@@ -517,6 +516,7 @@ static NTSTATUS IoctlRequestTotalScreens(
 	const WDFREQUEST      Request,
 	size_t* BytesReturned)
 {
+	TRACING();
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	UNREFERENCED_PARAMETER(OutputBufferLength);
 	UNREFERENCED_PARAMETER(BytesReturned);
@@ -552,6 +552,7 @@ static NTSTATUS IoctlRequestHPEventInfo(
 	const WDFREQUEST      Request,
 	size_t* BytesReturned)
 {
+	TRACING();
 	UNREFERENCED_PARAMETER(DeviceContext);
 	UNREFERENCED_PARAMETER(InputBufferLength);
 	UNREFERENCED_PARAMETER(OutputBufferLength);

@@ -335,7 +335,7 @@ NTSTATUS DVServerKMDEvtD0Exit(
 	NTSTATUS status = STATUS_SUCCESS;
 	PDEVICE_CONTEXT pDeviceContext;
 	VioGpuAdapterLite* pVioGpuAdapterLite;
-
+	TRACING();
 	UNREFERENCED_PARAMETER(PreviousState);
 
 	pDeviceContext = DeviceGetContext(Device);
@@ -383,7 +383,7 @@ BOOLEAN DVServerKMDEvtInterruptISR(
 {
 	PDEVICE_CONTEXT pDeviceContext;
 	VioGpuAdapterLite* pVioGpuAdapterLite;
-
+	TRACING();
 	pDeviceContext = DeviceGetContext(WdfInterruptGetDevice(Interrupt));
 
 	//
@@ -424,7 +424,7 @@ void DVServerKMDEvtInterruptDPC(
 {
 	PDEVICE_CONTEXT pDeviceContext;
 	VioGpuAdapterLite* pVioGpuAdapterLite;
-
+	TRACING();
 	UNREFERENCED_PARAMETER(AssociatedObject);
 
 	pDeviceContext = DeviceGetContext(WdfInterruptGetDevice(Interrupt));
@@ -438,6 +438,45 @@ void DVServerKMDEvtInterruptDPC(
 		return;
 
 	pVioGpuAdapterLite->DpcRoutine();
+}
+
+NTSTATUS
+DVServerKMDEvtDeviceD0ExitPreInterruptsDisabled(
+	IN WDFDEVICE Device,
+	IN WDF_POWER_DEVICE_STATE TargetState
+)
+/*++
+
+Routine Description:
+
+	EvtDeviceD0ExitPreInterruptsDisabled is called by the framework before the
+	driver disables the device's hardware interrupts.
+
+Arguments:
+
+	Device - Handle to a framework device object.
+
+	TargetState - A WDF_POWER_DEVICE_STATE-typed enumerator that identifies the
+				  device power state that the device is about to enter.
+
+Return Value:
+
+	NTSTATUS - Failures will be logged, but not acted on.
+
+--*/
+{
+	UNREFERENCED_PARAMETER(TargetState);
+	TRACING();
+	PAGED_CODE();
+
+	PDEVICE_CONTEXT pDeviceContext;
+	pDeviceContext = DeviceGetContext(Device);
+	VioGpuAdapterLite* pVioGpuAdapterLite;
+	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+
+	pVioGpuAdapterLite->DestroyFrameBufferCursorObjExt();
+
+	return STATUS_SUCCESS;
 }
 
 NTSTATUS DVServerKMDEvtInterruptEnable(
@@ -466,6 +505,7 @@ Return Value:
 
 --*/
 {
+	TRACING();
 	UNREFERENCED_PARAMETER(Interrupt);
 	UNREFERENCED_PARAMETER(AssociatedDevice);
 
@@ -498,8 +538,15 @@ Return Value:
 
 --*/
 {
-	UNREFERENCED_PARAMETER(Interrupt);
+	TRACING();
 	UNREFERENCED_PARAMETER(AssociatedDevice);
+
+	PDEVICE_CONTEXT pDeviceContext;
+	pDeviceContext = DeviceGetContext(WdfInterruptGetDevice(Interrupt));
+	VioGpuAdapterLite* pVioGpuAdapterLite;
+	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+
+	pVioGpuAdapterLite->DisableInterruptExt();
 
 	return STATUS_SUCCESS;
 }
