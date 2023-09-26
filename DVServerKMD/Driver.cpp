@@ -127,6 +127,7 @@ Return Value:
 
 --*/
 {
+	TRACING();
 	WPP_CLEANUP(WdfDriverWdmGetDriverObject(driver));
 
 	return;
@@ -186,6 +187,8 @@ Return Value:
 	//
 	pnpPowerCallbacks.EvtDeviceD0Entry = DVServerKMDEvtD0Entry;
 	pnpPowerCallbacks.EvtDeviceD0Exit = DVServerKMDEvtD0Exit;
+
+	pnpPowerCallbacks.EvtDeviceD0ExitPreInterruptsDisabled = DVServerKMDEvtDeviceD0ExitPreInterruptsDisabled;
 
 	//
 	// Register the PnP Callbacks..

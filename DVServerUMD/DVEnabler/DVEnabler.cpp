@@ -28,8 +28,7 @@ int dvenabler_init()
 	int status;
 	unsigned int path_count = NULL, mode_count = NULL;
 	bool found_id_path = FALSE, found_non_id_path = FALSE;
-	unsigned int prev_path_count = NULL;
-	bool update_prev_path_count = FALSE;
+	disp_info dinfo = { 0 };
 	/* Initializing the baseType.baseOutputTechnology to default OS value(failcase) */
 	baseType.baseOutputTechnology = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER;
 
@@ -46,7 +45,7 @@ int dvenabler_init()
 	hp_event = CreateEvent(&hp_sa, FALSE, FALSE, HOTPLUG_EVENT);
 	if (NULL == hp_event) {
 		ERR("Cannot create HOTPULG event!\n");
-		return -1;
+		return DVENABLER_FAILURE;
 	}
 
 	//Create Security Descriptor for DVE_EVENT, To allow the DVServerUMD to access the event
@@ -63,11 +62,15 @@ int dvenabler_init()
 	if (NULL == dve_event) {
 		ERR("Cannot create DVE event!\n");
 		CloseHandle(hp_event);
-		return -1;
+		return DVENABLER_FAILURE;
 	}
 
 	while (1)
 	{
+		//Reset the flags before doing QDC
+		path_count = NULL, mode_count = NULL;
+		found_id_path = FALSE, found_non_id_path = FALSE;
+
 		/* Step 0: Get the size of buffers w.r.t active paths and modes, required for QueryDisplayConfig */
 		if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &path_count, &mode_count) != ERROR_SUCCESS) {
 			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
@@ -79,6 +82,19 @@ int dvenabler_init()
 		/* Initializing STL vectors for all the paths and its respective modes */
 		std::vector<DISPLAYCONFIG_PATH_INFO> path_list(path_count);
 		std::vector<DISPLAYCONFIG_MODE_INFO> mode_list(mode_count);
+
+		//Get the Display info shared from DVServerUMD
+		if (GetDisplayCount(&dinfo) == DVENABLER_FAILURE) {
+			ERR("shared mem read failed");
+			goto end;
+		}
+
+
+                if (dinfo.exit_dvenabler) {
+                        ERR("exit flag is set so exit dvenabler");
+                        break;
+                }
+
 
 		/* Step 1: Retrieve information about all possible display paths for all display devices */
 		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, path_list.data(), &mode_count, mode_list.data(), nullptr) != ERROR_SUCCESS) {
@@ -112,29 +128,28 @@ int dvenabler_init()
 					found_non_id_path = true;
 				}
 				else {
-					found_id_path = true;
 					/* Move the IDD source co-ordinates to (0,0)  if MSBDA monitor is listed as first monitor in the path list*/
-					if (found_non_id_path) {
+					if (found_non_id_path && !found_id_path) {
 						mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x = 0;
 						mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y = 0;
 						DBGPRINT("x, y  = %dX%x\n", mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x,
 							mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y);
 					}
+					found_id_path = true;
 				}
 			}
 		}
 
-		//If the Path count is same as the previous path count and if the MSDBA monitor is also not found
-		//which mean after hotplug the OS not updated the current path count yet, So looping back to get the proper path count
-		if ((path_count == prev_path_count) && found_non_id_path == FALSE) {
-			DBGPRINT("Path count not updated... Retry QDC to get updated Path count");
+		if ((found_non_id_path && (path_count != static_cast<unsigned int>(dinfo.disp_count + 1))) ||
+			(!found_non_id_path && (path_count != static_cast<unsigned int>(dinfo.disp_count)))) {
+			if (found_non_id_path) {
+				DBGPRINT("MSFT display is present. Path count not updated, so loop again");
+			}
+			else {
+				DBGPRINT("MSFT display is not present. Path count not updated, so loop again");
+			}
+			DBGPRINT("disp_count = %d, path count = %d", dinfo.disp_count, path_count);
 			continue;
-		}
-
-		//In UMD, dve_event is set once during boot, So DVenabler will loop twice during boot,
-		// so dont update the previous path count during the first loop of boot.
-		if (update_prev_path_count) {
-			prev_path_count = path_count;
 		}
 
 		if (found_non_id_path && found_id_path) {
@@ -167,17 +182,54 @@ int dvenabler_init()
 			continue;
 		}
 
+		end:
 		//wait for arraival or departure call from UMD
 		WaitForSingleObject(dve_event, INFINITE);
 
-		update_prev_path_count = TRUE;
-		path_count = NULL, mode_count = NULL;
-		found_id_path = FALSE, found_non_id_path = FALSE;
-
 	}
 	WPP_CLEANUP();
+	//Inform DVServerUmd About Initiation of DVenabler Cleanup. So that the UMD can exit
+	status = SetEvent(hp_event);
+	if (status == NULL) {
+		ERR(" Set HPevent failed with error [%d]\n ", GetLastError());
+	}
 	CloseHandle(hp_event);
 	CloseHandle(dve_event);
 
 	return 0;
+}
+
+int GetDisplayCount(disp_info* pdinfo) {
+
+	// Open the existing shared memory section by its name
+	HANDLE hSharedMem = OpenFileMapping(FILE_MAP_READ, FALSE, DISP_INFO);
+
+	if (hSharedMem == NULL) {
+		ERR("Failed to open shared memory section (%d)\n", GetLastError());
+		return DVENABLER_FAILURE;
+	}
+
+	// Map the shared memory into the process's address space
+	struct disp_info* pSharedMem = (struct disp_info*)MapViewOfFile(
+		hSharedMem,          // Handle to the shared memory section
+		FILE_MAP_READ,       // Read access
+		0,                   // File offset - high-order DWORD
+		0,                   // File offset - low-order DWORD
+		0);                  // Mapping size (0 means to map the entire section)
+
+	if (pSharedMem == NULL) {
+		ERR(L"Failed to map view of shared memory section (%d)\n", GetLastError());
+		CloseHandle(hSharedMem);
+		return DVENABLER_FAILURE;
+	}
+
+	WaitForSingleObject(pSharedMem->mutex, INFINITE);
+	*pdinfo = *pSharedMem;
+	ReleaseMutex(pSharedMem->mutex);
+
+	UnmapViewOfFile(pSharedMem);
+	CloseHandle(hSharedMem);
+
+	return DVENABLER_SUCCESS;
+
 }

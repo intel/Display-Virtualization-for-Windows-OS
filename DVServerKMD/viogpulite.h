@@ -111,7 +111,7 @@ public:
 
 class IVioGpuAdapterLite {
 public:
-	IVioGpuAdapterLite(_In_ PVOID pvDevcieContext) { m_pvDeviceContext = pvDevcieContext; m_bEDID = FALSE; }
+	IVioGpuAdapterLite(_In_ PVOID pvDevcieContext) { m_pvDeviceContext = pvDevcieContext; m_bEDID = FALSE; m_Id = 0; }
 	virtual ~IVioGpuAdapterLite(void) { ; }
 	virtual NTSTATUS SetPowerState(DEVICE_POWER_STATE DevicePowerState) = 0;
 	virtual NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION* pDispInfo) = 0;
@@ -174,6 +174,8 @@ public:
 	PBYTE GetEdidData(UINT Idx);
 	VOID FillPresentStatus(struct hp_info* info);
 	VOID SetEvent(HANDLE event);
+	void DestroyFrameBufferCursorObjExt();
+	void DisableInterruptExt();
 
 private:
 
