@@ -142,8 +142,7 @@ static BOOLEAN IsSameMode(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE* pCurr
 		return result;
 
 	if (pModeInfo->VisScreenWidth == pCurrentMode->DispInfo.Width &&
-		pModeInfo->VisScreenHeight == pCurrentMode->DispInfo.Height &&
-		pModeInfo->ScreenStride == pCurrentMode->DispInfo.Pitch)
+		pModeInfo->VisScreenHeight == pCurrentMode->DispInfo.Height)
 		result = TRUE;
 
 	return result;
@@ -586,7 +585,8 @@ NTSTATUS VioGpuAdapterLite::ExecutePresentDisplayZeroCopy(
 	_In_ LONG               SrcPitch,
 	_In_ UINT               SrcWidth,
 	_In_ UINT               SrcHeight,
-	_In_ UINT               ScreenNum)
+	_In_ UINT               ScreenNum,
+	_In_ UINT               Stride)
 {
 	PAGED_CODE();
 	TRACING();
@@ -605,6 +605,7 @@ NTSTATUS VioGpuAdapterLite::ExecutePresentDisplayZeroCopy(
 	tempCurrentMode.DispInfo.TargetId = ScreenNum;
 	tempCurrentMode.DispInfo.ColorFormat = D3DDDIFMT_X8R8G8B8;
 	tempCurrentMode.FrameBuffer.Ptr = SrcAddr;
+	tempCurrentMode.Stride = Stride;
 
 	status = SetCurrentModeExt(&tempCurrentMode);
 
@@ -844,14 +845,12 @@ void ScreenInfo::SetVideoModeInfo(UINT Idx, PGPU_DISP_MODE_EXT pModeInfo)
 	PAGED_CODE();
 	TRACING();
 	PVIDEO_MODE_INFORMATION pMode = NULL;
-	UINT bytes_pp = (VGPU_BPP + 7) / 8;
 
 	pMode = &m_ModeInfo[Idx];
 	pMode->Length = sizeof(VIDEO_MODE_INFORMATION);
 	pMode->ModeIndex = Idx;
 	pMode->VisScreenWidth = pModeInfo->XResolution;
 	pMode->VisScreenHeight = pModeInfo->YResolution;
-	pMode->ScreenStride = (pModeInfo->XResolution * bytes_pp + 3) & ~0x3;
 }
 
 void ScreenInfo::SetCustomDisplay(_In_ USHORT xres, _In_ USHORT yres)
@@ -1178,7 +1177,7 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 	DBGPRINT("%d: %d, (%d x %d)\n", m_Id, pCurrentMode->DispInfo.TargetId,
 		pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight);
 	ASSERT(m_screen[pCurrentMode->DispInfo.TargetId].m_pFrameBuf == NULL);
-	size = pModeInfo->ScreenStride * pModeInfo->VisScreenHeight;
+	size = pCurrentMode->DispInfo.Pitch * pModeInfo->VisScreenHeight;
 	format = ColorFormat(pCurrentMode->DispInfo.ColorFormat);
 	DBGPRINT("(%d -> %d)\n", pCurrentMode->DispInfo.ColorFormat, format);
 	resid = m_Idr.GetId();
@@ -1204,11 +1203,11 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 		return;
 	}
 
-	GpuObjectAttach(resid, obj, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight);
+	GpuObjectAttach(resid, obj, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight,pCurrentMode->Stride);
 
 	if (m_bBlobSupported)
 	{
-		m_CtrlQueue.SetScanoutBlob(pCurrentMode->DispInfo.TargetId, resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, format, 0, 0);
+		m_CtrlQueue.SetScanoutBlob(pCurrentMode->DispInfo.TargetId, resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, format, 0, 0,pCurrentMode->Stride);
 	}
 	else
 	{
@@ -1278,7 +1277,8 @@ BOOLEAN VioGpuAdapterLite::CreateCursor(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSet
 		delete obj;
 		return FALSE;
 	}
-	if (!GpuObjectAttach(resid, obj, POINTER_SIZE, POINTER_SIZE))
+	//TODO: Stride is set to zero as cursor does not use.
+	if (!GpuObjectAttach(resid, obj, POINTER_SIZE, POINTER_SIZE,0))
 	{
 		VioGpuDbgBreak();
 		ERR("Failed to attach gpu object\n");
@@ -1345,7 +1345,7 @@ void VioGpuAdapterLite::DestroyCursor()
 	}
 }
 
-BOOLEAN VioGpuAdapterLite::GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height)
+BOOLEAN VioGpuAdapterLite::GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height , ULONGLONG stride)
 {
 	PAGED_CODE();
 	TRACING();
@@ -1372,7 +1372,7 @@ BOOLEAN VioGpuAdapterLite::GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLON
 	}
 
 	if (m_bBlobSupported) {
-		m_CtrlQueue.CreateResourceBlob(res_id, ents, sgl->NumberOfElements, width, height);
+		m_CtrlQueue.CreateResourceBlob(res_id, ents, sgl->NumberOfElements, width, height, stride);
 	}
 	else {
 		m_CtrlQueue.AttachBacking(res_id, ents, sgl->NumberOfElements);

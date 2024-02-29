@@ -130,16 +130,11 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 
 	DBGPRINT("Modes\n");
 	for (i = 0; i < edata->mode_size; i++) {
-		//TRIMMING LOGIC:
-		//Restricting EDID size to 32
-		//Discarding modes with width more than 3840 & less than 1024
-		//Discarding blacklisted modes
-		//Discarding the modes for which kmd & umd strides are not equal
+		//TRIMMING LOGIC: Restricting EDID size to 32 and discarding modes with width more than 3840 & less than 1024
 		if ((edata->mode_list[i].width <= WIDTH_UPPER_CAP) &&
 			(edata->mode_list[i].width >= WIDTH_LOWER_CAP) &&
 			(edid_mode_index < monitor->szModeList) &&
-			(is_blacklist(edata->mode_list[i].width, edata->mode_list[i].height) == 0) &&
-			(is_samestride(edata->mode_list[i].width) == 0)) {
+			(is_blacklist(edata->mode_list[i].width, edata->mode_list[i].height) == 0)) {
 			monitor->pModeList[edid_mode_index].Width = edata->mode_list[i].width;
 			monitor->pModeList[edid_mode_index].Height = edata->mode_list[i].height;
 			if ((DWORD)edata->mode_list[i].refreshrate == REFRESH_RATE_59)
@@ -227,46 +222,4 @@ int is_blacklist(unsigned int width, unsigned int height)
 		}
 	}
 	return DVSERVERUMD_SUCCESS;
-}
-
-/*******************************************************************************
-*
-* Description
-*
-* is_samestride - This function generates kmd, umd strides & compare them
-* It returns SUCCESS if both are same
-*
-* Parameters
-* width - resolution width
-*
-* Return val
-* int - 0 == SUCCESS, -1 = ERROR
-*
-******************************************************************************/
-int is_samestride(unsigned int width)
-{
-	UINT kmdstride = 0;
-	UINT bytes_pp = 0;
-	UINT umdstride = 0;
-	UINT rem = 0;
-	UINT padding = 0;
-
-	bytes_pp = (VGPU_BPP + 7) / 8;
-	kmdstride = (width * bytes_pp + 3) & ~0x3;
-
-	rem = width % BYTE_ALIGN_16;
-	if (rem != 0) {
-		padding = BYTE_ALIGN_16 - rem;
-	}
-	else {
-		padding = 0;
-	}
-	umdstride = 4 * (width + padding);
-
-	if (kmdstride == umdstride) {
-		return DVSERVERUMD_SUCCESS;
-	}
-	else {
-		return DVSERVERUMD_FAILURE;
-	}
 }

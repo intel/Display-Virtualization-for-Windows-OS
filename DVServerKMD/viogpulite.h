@@ -58,6 +58,7 @@ typedef struct _CURRENT_MODE
 	D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling;
 	UINT SrcModeWidth;
 	UINT SrcModeHeight;
+	UINT Stride;
 	struct _CURRENT_MODE_FLAGS
 	{
 		UINT SourceNotVisible : 1;
@@ -151,7 +152,8 @@ public:
 		_In_ LONG               SrcPitch,
 		_In_ UINT               SrcWidth,
 		_In_ UINT               SrcHeight,
-		_In_ UINT               ScreenNum);
+		_In_ UINT               ScreenNum,
+		_In_ UINT               Stride);
 	VOID BlackOutScreen(CURRENT_MODE* pCurrentMod);
 	BOOLEAN InterruptRoutine(_In_  ULONG MessageNumber);
 	VOID DpcRoutine(void);
@@ -197,7 +199,7 @@ private:
 	void DestroyFrameBufferObj(UINT32 screen_num, BOOLEAN bReset);
 	BOOLEAN CreateCursor(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pCurrentMode);
 	void DestroyCursor(void);
-	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height);
+	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
 	void static ThreadWork(_In_ PVOID Context);
 	void ThreadWorkRoutine(void);
 	void ConfigChanged(void);

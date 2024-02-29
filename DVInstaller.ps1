@@ -141,7 +141,7 @@ function Register_ScheduledTask()
 		Register-ScheduledTask -TaskName "DVEnabler" -Trigger @($tr, $onUnlockTrigger) -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr -Settings $settings -ErrorAction Stop
 
 		#Register a task to Stop the dvenabler.dll during every user lock
-			$ac = New-ScheduledTaskAction -Execute "powershell.exe"  -Argument "-ExecutionPolicy Bypass -NoProfile -WindowStyle Hidden -Command `"Stop-ScheduledTask -TaskName '\Microsoft\Windows\DVEnabler\DvEnabler'`""
+			$ac = New-ScheduledTaskAction -Execute "powershell.exe"  -Argument "-Command `"`$`processes = Get-Process | Where-Object { `$`_.Modules.ModuleName -contains 'DVEnabler.dll' } | Sort-Object StartTime; if (`$`processes.Count -gt 0) { taskkill /F /PID `$`processes[0].Id }`""
 			$pr = New-ScheduledTaskPrincipal  -Groupid  $interactiveSID -RunLevel Highest
 			$settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -ExecutionTimeLimit 0 -MultipleInstances Queue
 		Register-ScheduledTask -TaskName "StopDVEnabler" -Trigger $onLockTrigger -TaskPath "\Microsoft\Windows\DVEnabler" -Action $ac -Principal $pr -Settings $settings -ErrorAction Stop

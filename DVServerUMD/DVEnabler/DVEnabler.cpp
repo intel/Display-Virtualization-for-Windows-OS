@@ -89,13 +89,6 @@ int dvenabler_init()
 			goto end;
 		}
 
-
-                if (dinfo.exit_dvenabler) {
-                        ERR("exit flag is set so exit dvenabler");
-                        break;
-                }
-
-
 		/* Step 1: Retrieve information about all possible display paths for all display devices */
 		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, path_list.data(), &mode_count, mode_list.data(), nullptr) != ERROR_SUCCESS) {
 			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
@@ -188,11 +181,6 @@ int dvenabler_init()
 
 	}
 	WPP_CLEANUP();
-	//Inform DVServerUmd About Initiation of DVenabler Cleanup. So that the UMD can exit
-	status = SetEvent(hp_event);
-	if (status == NULL) {
-		ERR(" Set HPevent failed with error [%d]\n ", GetLastError());
-	}
 	CloseHandle(hp_event);
 	CloseHandle(dve_event);
 

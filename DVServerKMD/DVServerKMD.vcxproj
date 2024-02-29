@@ -106,8 +106,8 @@
     </Inf>
     <PostBuildEvent>
       <Command>makecert -r -pe -ss PrivateCertStore -n CN=DVServerKMD -eku 1.3.6.1.5.5.7.3.3 $(OutDir)DVServerKMD.cer
-Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\dvserverkmd.cat
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\DVServerKMD.sys
+Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\dvserverkmd.cat
 certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
     </PostBuildEvent>
     <DriverSign>
@@ -131,8 +131,8 @@ certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
     </Inf>
     <PostBuildEvent>
       <Command>makecert -r -pe -ss PrivateCertStore -n CN=DVServerKMD -eku 1.3.6.1.5.5.7.3.3 $(OutDir)DVServerKMD.cer
-Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\dvserverkmd.cat
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\DVServerKMD.sys
+Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServerKMD /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServerKMD\dvserverkmd.cat
 certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
     </PostBuildEvent>
     <DriverSign>

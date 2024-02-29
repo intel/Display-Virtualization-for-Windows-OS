@@ -360,6 +360,7 @@ static NTSTATUS IoctlRequestSetMode(
 	tempCurrentMode.DispInfo.TargetId = ptr->screen_num;
 	tempCurrentMode.DispInfo.ColorFormat = (D3DDDIFORMAT)ptr->format;
 	tempCurrentMode.FrameBuffer.Ptr = (BYTE*)ptr->addr;
+	tempCurrentMode.Stride = ptr->stride;
 
 	status = pAdapter->SetCurrentModeExt(&tempCurrentMode);
 	if (status != STATUS_SUCCESS) {
@@ -426,7 +427,8 @@ static NTSTATUS IoctlRequestPresentFb(
 		ptr->pitch,
 		ptr->width,
 		ptr->height,
-		ptr->screen_num);
+		ptr->screen_num,
+		ptr->stride);
 
 	if (status != STATUS_SUCCESS) {
 		ERR("ExecutePresentDisplayZeroCopy failed with status = %d\n", status);
