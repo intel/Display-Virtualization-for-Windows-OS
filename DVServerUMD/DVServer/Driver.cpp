@@ -1643,9 +1643,8 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 
 	pDeviceContextWrapper->pContext->FinishInit(PRIMARY_IDD_INDEX);
 
-	// Default IDD monitor will be enabled at this time. so setting disp_count to 1 and reseting the Dvenabler_exit flag
+	// Default IDD monitor will be enabled at this time. so setting disp_count to 1.
 	WaitForSingleObject(pSharedMem->mutex, INFINITE);
-	pSharedMem->exit_dvenabler = FALSE;
 	pSharedMem->disp_count = 1;
 	ReleaseMutex(pSharedMem->mutex);
 
@@ -1705,14 +1704,6 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		}
 		else if (waitstatus == WAIT_OBJECT_0 + 1) {
 			DBGPRINT("UMD is entering D3 state so kill the HPD thread");
-			WaitForSingleObject(pSharedMem->mutex, INFINITE);
-			pSharedMem->exit_dvenabler = TRUE;
-			ReleaseMutex(pSharedMem->mutex);
-
-			status = SetEvent(dve_event);
-			if (status == NULL) {
-				ERR("Set dve-event failed during Display Arrival/departure with error [%d]\n ", GetLastError());
-			}
 			break;
 		}
 		else {
@@ -1728,13 +1719,6 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 			IddCxMonitorDeparture(g_monitorobject_list[count]);
 			g_monitorobject_list[count] = NULL;
 		}
-	}
-
-	//before exiting wait for DVEnabler to get unloaded
-	WaitForSingleObject(hp_event, WAIT_DELAY);
-	status = ResetEvent(hp_event);
-	if (!status) {
-		ERR("manual reset failed During HPD Exit ");
 	}
 
 	UnmapViewOfFile(pSharedMem);

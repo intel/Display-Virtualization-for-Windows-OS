@@ -29,7 +29,6 @@ DEFINE_GUID(GUID_DEVINTERFACE_DVSERVERKMD,
 #define DEVINFO_FLAGS					DIGCF_PRESENT | DIGCF_ALLCLASSES | DIGCF_DEVICEINTERFACE
 #define REPORT_FRAME_STATS				60 // we need to report frame stats to OS for every 60 frames
 #define PRINT_FREQ                      3600
-#define WAIT_DELAY						6000 // Maximum duration that the UMD will wait for DVEnabler to complete its cleanup during the D0 exit process.
 
 typedef enum FrameType
 {
@@ -216,5 +215,4 @@ int get_hpd_data(HANDLE devHandle, struct hp_info* data);
 struct disp_info {
 	int disp_count;
 	HANDLE mutex;
-	BOOL exit_dvenabler;
 };

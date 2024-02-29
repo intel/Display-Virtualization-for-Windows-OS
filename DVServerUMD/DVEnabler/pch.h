@@ -23,7 +23,6 @@ int dvenabler_init();
 struct disp_info {
 	int disp_count;
 	HANDLE mutex;
-	BOOL exit_dvenabler;
 };
 int GetDisplayCount(disp_info* pdinfo);
 #endif //PCH_H

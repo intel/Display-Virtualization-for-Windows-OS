@@ -261,8 +261,8 @@
     </Inf>
     <PostBuildEvent>
       <Command>makecert -r -pe -ss PrivateCertStore -n CN=DVServer -eku 1.3.6.1.5.5.7.3.3 $(OutDir)DVServer.cer
-Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\dvserver.cat
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\DVServer.dll
+Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\dvserver.cat
 certmgr -del -c -n "DVServer" -s PrivateCertStore</Command>
     </PostBuildEvent>
     <DriverSign>
@@ -292,8 +292,8 @@ certmgr -del -c -n "DVServer" -s PrivateCertStore</Command>
     </Inf>
     <PostBuildEvent>
       <Command>makecert -r -pe -ss PrivateCertStore -n CN=DVServer -eku 1.3.6.1.5.5.7.3.3 $(OutDir)DVServer.cer
-Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\dvserver.cat
 Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\DVServer.dll
+Signtool sign /v /fd sha256 /s PrivateCertStore /n DVServer /tr http://timestamp.digicert.com /td sha256 $(OutDir)DVServer\dvserver.cat
 certmgr -del -c -n "DVServer" -s PrivateCertStore</Command>
     </PostBuildEvent>
     <DriverSign>

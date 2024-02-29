@@ -185,11 +185,11 @@ public:
 	PGPU_VBUFFER DequeueBuffer(_Out_ UINT* len);
 
 	void CreateResource(UINT res_id, UINT format, UINT width, UINT height);
-	void CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents, ULONGLONG width, ULONGLONG height);
+	void CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
 	void UnrefResource(UINT id);
 	void InvalBacking(UINT id);
 	void SetScanout(UINT scan_id, UINT res_id, UINT width, UINT height, UINT x, UINT y);
-	void SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT height, UINT format, UINT x, UINT y);
+	void SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT height, UINT format, UINT x, UINT y, UINT stride);
 	void ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, UINT screen_num, KEVENT* event);
 	void TransferToHost2D(UINT res_id, ULONG offset, UINT width, UINT height, UINT x, UINT y, PUINT fence_id);
 	void AttachBacking(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents);

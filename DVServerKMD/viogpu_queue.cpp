@@ -347,9 +347,10 @@ void CtrlQueue::CreateResource(UINT res_id, UINT format, UINT width, UINT height
 	QueueBuffer(vbuf);
 }
 
-void CtrlQueue::CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents, ULONGLONG width, ULONGLONG height)
+void CtrlQueue::CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents, ULONGLONG width, ULONGLONG height, ULONGLONG stride)
 {
 	PAGED_CODE();
+	UNREFERENCED_PARAMETER(width);
 	TRACING();
 
 	PGPU_RES_CREATE_BLOB cmd;
@@ -368,7 +369,7 @@ void CtrlQueue::CreateResourceBlob(UINT res_id, PGPU_MEM_ENTRY ents, UINT nents,
 	cmd->blob_id = 0;
 	cmd->nr_entries = nents;
 	/* TODO: Check if ROUND_TO_PAGES (round up) should be used or PAGE_ALIGN (round down) */
-	cmd->size = ROUND_TO_PAGES(width * height * 4);
+	cmd->size = ROUND_TO_PAGES(stride * height * 4);
 
 	vbuf->data_buf = ents;
 	vbuf->data_size = sizeof(*ents) * nents;
@@ -449,7 +450,7 @@ void CtrlQueue::SetScanout(UINT scan_id, UINT res_id, UINT width, UINT height, U
 	QueueBuffer(vbuf);
 }
 
-void CtrlQueue::SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT height, UINT format, UINT x, UINT y)
+void CtrlQueue::SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT height, UINT format, UINT x, UINT y, UINT stride)
 {
 	PAGED_CODE();
 	TRACING();
@@ -472,7 +473,7 @@ void CtrlQueue::SetScanoutBlob(UINT scan_id, UINT res_id, UINT width, UINT heigh
 
 	/* TODO: Check strides and offsets */
 	for (int i = 0; i < 4; i++) {
-		cmd->strides[i] = width * 4;
+		cmd->strides[i] = stride * 4;
 		cmd->offsets[i] = 0;
 	}
 
