@@ -93,3 +93,27 @@ bin\tracelog.exe -stop Mytrace
 
 Step-5
 open realtime.txt from tracing dir which contains the traces.
+
+---------------------------------------------------------------------------
+#####  Steps to install Drivers using DVInstaller in commandline  #####
+---------------------------------------------------------------------------
+
+1. Go to the zerocopy installer directory.
+2. Run below specified command and select yes in UAC prompt
+
+With restart: Installs the driver and restarts the system.
+Command: ZeroCopyInstaller.exe /VERYSILENT /SUPPRESSMSGBOXES
+
+Without restart: Installs the driver without any restart of the system.
+Command: ZeroCopyInstaller.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+
+/VERYSILENT: Runs silently without displaying windows.
+/SUPPRESSMSGBOXES: Supress message boxes any displayed.
+/NORESTART: Avoid the restart of the system after installer.
+
+----------------------------------------------------------------
+#####  Steps to install Drivers using GUI DVInstaller  #####
+----------------------------------------------------------------
+
+1. Go to the zerocopy installer directory.
+2. Run ZeroCopyInstaller.exe and select yes in UAC prompt.
