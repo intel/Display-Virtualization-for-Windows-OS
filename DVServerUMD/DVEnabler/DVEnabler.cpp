@@ -13,6 +13,8 @@
 #include "Trace.h"
 #include "DVEnabler.tmh"
 #include <Windows.h>
+#include <stdio.h>
+#include <string.h>
 
 
 int dvenabler_init()
@@ -67,6 +69,11 @@ int dvenabler_init()
 
 	while (1)
 	{
+		if (IsSystemLocked()) {
+			DBGPRINT("System is in locked state, so wait untill system gets unlocked");
+			continue;
+		}
+
 		//Reset the flags before doing QDC
 		path_count = NULL, mode_count = NULL;
 		found_id_path = FALSE, found_non_id_path = FALSE;
@@ -220,4 +227,58 @@ int GetDisplayCount(disp_info* pdinfo) {
 
 	return DVENABLER_SUCCESS;
 
+}
+
+
+/*******************************************************************************
+*
+* Description
+*
+* IsSystemLocked - This function is used to check if the system is in locked
+* or unlocked state.
+*
+* Parameters
+* Null
+*
+* Return val
+* int - 0 = Unlocked, -1 = ERROR, 1 = Locked
+*
+******************************************************************************/
+
+int IsSystemLocked() {
+	FILE* fp;
+	char buffer[128];
+	int status = TRUE;
+
+	// Run the PowerShell command to get the system lock status
+	fp = _popen("powershell.exe -WindowStyle Hidden -Command \"(quser 2>$null) -and (get-process logonui -ea 0)\"", "r");
+	if (fp == NULL) {
+		ERR("Failed to run PowerShell command.\n");
+		return DVENABLER_FAILURE;
+	}
+
+	// Read the output of the PowerShell command
+	while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+		// Check if the output is "true" (indicating locked) and act accordingly
+		if (strstr(buffer, "True") != NULL) {
+			DBGPRINT("System is locked\n");
+			status = TRUE;
+		}
+		else if (strstr(buffer, "False") != NULL) {
+			DBGPRINT("System is unlocked\n");
+			status = FALSE;
+		}
+		else {
+			ERR("Unexpected output\n");
+			status = DVENABLER_FAILURE;
+		}
+	}
+
+	// Close the pipe and print any errors
+	if (_pclose(fp) != 0) {
+		ERR("Error occurred while running PowerShell command.\n");
+		return DVENABLER_FAILURE;
+	}
+
+	return status;
 }

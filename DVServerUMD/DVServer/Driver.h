@@ -216,3 +216,9 @@ struct disp_info {
 	int disp_count;
 	HANDLE mutex;
 };
+
+struct monitor_info {
+	bool status;
+	static constexpr size_t szEdidBlock = 256;
+	BYTE pEdidBlock[szEdidBlock];
+};

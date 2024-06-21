@@ -127,12 +127,22 @@ public:
 	PVOID GetVioGpu(void) { return m_pvDeviceContext; }
 	virtual PBYTE GetEdidData(UINT Idx) = 0;
 	virtual PHYSICAL_ADDRESS GetFrameBufferPA(void) = 0;
+	DXGK_DISPLAY_INFORMATION DisplayInfo = {
+	1024,
+	768,
+	4096,
+	D3DDDIFMT_X8R8G8B8,
+	0,
+	0,
+	0
+	};
 protected:
 	virtual NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo) = 0;
 protected:
 	ULONG  m_Id;
 	ScreenInfo m_screen[MAX_SCAN_OUT];
 	BOOLEAN m_bEDID;
+	KMUTEX m_screen_mutex;
 public:
 	PVOID m_pvDeviceContext;
 };
@@ -193,8 +203,6 @@ private:
 	void ProcessEdid(UINT32 screen_num);
 	BOOLEAN GetEdids(UINT32 screen_num);
 	void AddEdidModes(UINT32 screen_num);
-	// Not needed by the DVServerKMD
-	//NTSTATUS UpdateChildStatus(BOOLEAN connect);
 	void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE* pCurrentMode);
 	void DestroyFrameBufferObj(UINT32 screen_num, BOOLEAN bReset);
 	BOOLEAN CreateCursor(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pCurrentMode);

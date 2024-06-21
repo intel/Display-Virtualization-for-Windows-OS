@@ -189,6 +189,7 @@ Return Value:
 	pnpPowerCallbacks.EvtDeviceD0Exit = DVServerKMDEvtD0Exit;
 
 	pnpPowerCallbacks.EvtDeviceD0ExitPreInterruptsDisabled = DVServerKMDEvtDeviceD0ExitPreInterruptsDisabled;
+	pnpPowerCallbacks.EvtDeviceD0EntryPostInterruptsEnabled = DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled;
 
 	//
 	// Register the PnP Callbacks..

@@ -136,8 +136,6 @@ EVT_IDD_CX_MONITOR_QUERY_TARGET_MODES DVServerUMDMonitorQueryModes;
 EVT_IDD_CX_MONITOR_ASSIGN_SWAPCHAIN DVServerUMDMonitorAssignSwapChain;
 EVT_IDD_CX_MONITOR_UNASSIGN_SWAPCHAIN DVServerUMDMonitorUnassignSwapChain;
 
-WDFDEVICE g_dvserver_device = NULL;
-
 struct IndirectDeviceContextWrapper
 {
 	IndirectDeviceContext* pContext;
@@ -236,7 +234,6 @@ VOID DVServerUMDUnload(WDFDRIVER Driver)
 _Use_decl_annotations_
 NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 {
-	DWORD count = 0;
 	NTSTATUS Status = STATUS_SUCCESS;
 	WDF_PNPPOWER_EVENT_CALLBACKS PnpPowerCallbacks;
 
@@ -291,7 +288,6 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	}
 
 	Status = IddCxDeviceInitialize(Device);
-	g_dvserver_device = Device;
 
 	// Create a new device context object and attach it to the WDF device object
 	auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
@@ -311,12 +307,6 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	} catch(const std::bad_alloc e){
 		ERR("Dynamic memory allocation failure");
 		return DVSERVERUMD_FAILURE;
-	}
-	for (count = 0; count < dvserver_monitor_count; count++) {
-		if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count) == DVSERVERUMD_FAILURE) {
-			ERR("Failed to get EDID from QEMU");
-			return DVSERVERUMD_FAILURE;
-		}
 	}
 
 	return Status;
@@ -1219,7 +1209,13 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 		// Tell the OS that the monitor has been plugged in
 		IDARG_OUT_MONITORARRIVAL ArrivalOut;
 		Status = IddCxMonitorArrival(MonitorCreateOut.MonitorObject, &ArrivalOut);
+		if (!(NT_SUCCESS(Status))) {
+			ERR(" Monitor Arrival failed with  error 0x%X\n", Status);
+		}
 		g_monitorobject_list[ConnectorIndex] = MonitorCreateOut.MonitorObject;
+	}
+	else {
+		ERR(" Monitor Create failed with  error 0x%X\n", Status);
 	}
 }
 
@@ -1542,11 +1538,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	HANDLE hp_terminate_event = NULL;
 	DWORD waitstatus;
 	bool do_set_event = FALSE;
+	bool d_edid = TRUE;
 	int status;
 	int count;
 	disp_info dinfo = { 0 };
 	hp_info hdata = { 0 };
-	static bool monitor_status[MAX_SCAN_OUT] = { 0 };
+	monitor_info minfo[MAX_SCAN_OUT] = { 0 };
 	HANDLE devHandle = g_DevInfo->get_Handle();
 	auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
 
@@ -1641,6 +1638,10 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		return DVSERVERUMD_FAILURE;
 	}
 
+	if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[PRIMARY_IDD_INDEX], PRIMARY_IDD_INDEX, d_edid) == DVSERVERUMD_FAILURE) {
+		ERR("QEMU EDID initialization failed to get the default Monitor EDID");
+	}
+
 	pDeviceContextWrapper->pContext->FinishInit(PRIMARY_IDD_INDEX);
 
 	// Default IDD monitor will be enabled at this time. so setting disp_count to 1.
@@ -1661,6 +1662,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		//KMD will set this for every HP interrupt recieved from QEMU.
 		waitstatus = WaitForMultipleObjects(ARRAYSIZE(hp_handles), hp_handles, FALSE, INFINITE);
 		if (waitstatus == WAIT_OBJECT_0) {
+			if (d_edid) {
+				DBGPRINT("call depature for Primary Index");
+				IddCxMonitorDeparture(g_monitorobject_list[PRIMARY_IDD_INDEX]);
+				g_monitorobject_list[PRIMARY_IDD_INDEX] = NULL;
+				d_edid = FALSE;
+			}
 			hdata.screen_present[3] = { 0 };
 			if (get_hpd_data(devHandle, &hdata) != DVSERVERUMD_SUCCESS) {
 				ERR("HotPlug resource allocation failed... Going back to the loop again");
@@ -1669,20 +1676,55 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 
 			//call display arrival and departure based on previous and current display state.
 			for (count = 0; count < MAX_SCAN_OUT; count++) {
-				if (monitor_status[count] != hdata.screen_present[count]) {
-					monitor_status[count] = hdata.screen_present[count];
+
+				if (minfo[count].status != hdata.screen_present[count]) {
+					minfo[count].status = hdata.screen_present[count];
+
 					if ((hdata.screen_present[count] == 0) && (g_monitorobject_list[count] != NULL)) {
 						DBGPRINT("call depature for DISPLAY = %d\n", count);
 						IddCxMonitorDeparture(g_monitorobject_list[count]);
 						g_monitorobject_list[count] = NULL;
+						memset(minfo[count].pEdidBlock, 0, minfo[count].szEdidBlock);
 						dinfo.disp_count--;
 					}
 					else {
+						if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, d_edid) == DVSERVERUMD_FAILURE) {
+							ERR("QEMU EDID initialization failed, falling back to default IDD EDID");
+							get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, TRUE);
+						}
+
+						memcpy_s(minfo[count].pEdidBlock, minfo->szEdidBlock, g_monitors[count].pEdidBlock, minfo->szEdidBlock);
+
+
 						DBGPRINT("call finishinit for DISPLAY = %d\n", count);
 						pDeviceContextWrapper->pContext->FinishInit(count);
 						dinfo.disp_count++;
 					}
 					do_set_event = TRUE;
+				} else if(hdata.screen_present[count]) {
+					if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, d_edid) == DVSERVERUMD_FAILURE) {
+						ERR("QEMU EDID initialization failed, falling back to default IDD EDID");
+						get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, TRUE);
+					}
+
+					if (memcmp(minfo[count].pEdidBlock, g_monitors[count].pEdidBlock, minfo->szEdidBlock) != 0) {
+						DBGPRINT("EDID changed for display = %d\n", count);
+
+						//Reset the edid block and copy the new edid block
+						memset(minfo[count].pEdidBlock, 0, minfo[count].szEdidBlock);
+						memcpy_s(minfo[count].pEdidBlock, minfo->szEdidBlock, g_monitors[count].pEdidBlock, minfo->szEdidBlock);
+
+
+						//Remove the display and connect it again with fresh EDID
+						IddCxMonitorDeparture(g_monitorobject_list[count]);
+						g_monitorobject_list[count] = NULL;
+						pDeviceContextWrapper->pContext->FinishInit(count);
+						do_set_event = TRUE;
+					}
+					else {
+						DBGPRINT("No changes in DISPLAY = %d\n", count);
+					}
+
 				}
 				else {
 					DBGPRINT("No changes in DISPLAY = %d\n", count);
@@ -1715,7 +1757,7 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	for (count = 0; count < MAX_SCAN_OUT; count++) {
 		if (hdata.screen_present[count]) {
 			DBGPRINT("Call departure for display %d from exit", count);
-			monitor_status[count] = FALSE;
+			minfo[count].status = FALSE;
 			IddCxMonitorDeparture(g_monitorobject_list[count]);
 			g_monitorobject_list[count] = NULL;
 		}

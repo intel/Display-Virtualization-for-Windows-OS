@@ -37,7 +37,6 @@
   <ItemGroup>
     <ClCompile Include="Driver.cpp" />
     <ClCompile Include="DVServeredid.cpp" />
-    <ClCompile Include="DVServerregistry.cpp" />
     <ClCompile Include="Tracing.cpp" />
   </ItemGroup>
   <ItemGroup>
