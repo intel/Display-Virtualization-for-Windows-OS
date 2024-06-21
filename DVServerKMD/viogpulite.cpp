@@ -160,6 +160,9 @@ NTSTATUS VioGpuAdapterLite::SetCurrentModeExt(CURRENT_MODE* pCurrentMode)
 		return status;
 	}
 
+	// Adding a lock here to prevent potential memory dereferencing issues,
+	//as m_screen is utilized across multiple threads
+	KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
 	DBGPRINT("ScreenNum = %d, Mode = %dx%d\n", pCurrentMode->DispInfo.TargetId, pCurrentMode->DispInfo.Width, pCurrentMode->DispInfo.Height);
 
 	for (ULONG idx = 0; idx < m_screen[pCurrentMode->DispInfo.TargetId].GetModeCount(); idx++)
@@ -183,6 +186,7 @@ NTSTATUS VioGpuAdapterLite::SetCurrentModeExt(CURRENT_MODE* pCurrentMode)
 		break;
 	}
 
+	KeReleaseMutex(&m_screen_mutex, FALSE);
 	return status;
 }
 
@@ -198,6 +202,9 @@ NTSTATUS VioGpuAdapterLite::VioGpuAdapterLiteInit()
 		VioGpuDbgBreak();
 		return status;
 	}
+
+	KeInitializeMutex(&m_screen_mutex, 0);
+
 	status = VirtIoDeviceInit();
 	if (!NT_SUCCESS(status)) {
 		DBGPRINT("Failed to initialize virtio device, error %x\n", status);
@@ -380,7 +387,20 @@ PBYTE VioGpuAdapterLite::GetEdidData(UINT Id)
 {
 	PAGED_CODE();
 	TRACING();
-	return m_bEDID ? m_screen[Id].m_EDIDs : (PBYTE)(&g_gpu_edid);//.data;
+	PBYTE ret;
+
+	if (m_bEDID) {
+		// Adding a lock here to prevent potential memory dereferencing issues,
+		//as m_screen is utilized across multiple threads
+		KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
+		ret = m_screen[Id].m_EDIDs;
+		KeReleaseMutex(&m_screen_mutex, FALSE);
+	}
+	else {
+		ret = (PBYTE)(&g_gpu_edid);
+	}
+
+	return ret;
 }
 
 NTSTATUS VioGpuAdapterLite::HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION* pDispInfo)
@@ -787,10 +807,14 @@ BOOLEAN VioGpuAdapterLite::GetEdids(UINT32 screen_num)
 
 	PGPU_VBUFFER vbuf = NULL;
 
+	// Adding a lock here to prevent potential memory dereferencing issues,
+	//as m_screen is utilized across multiple threads
+	KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
 	if (m_CtrlQueue.AskEdidInfo(&vbuf, screen_num, &m_screen[screen_num].m_EdidEvent) &&
 		m_CtrlQueue.GetEdidInfo(vbuf, screen_num, m_screen[screen_num].m_EDIDs)) {
 		m_bEDID = TRUE;
 	}
+	KeReleaseMutex(&m_screen_mutex, FALSE);
 	m_CtrlQueue.ReleaseBuffer(vbuf);
 
 	return TRUE;
@@ -881,6 +905,9 @@ NTSTATUS VioGpuAdapterLite::GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo)
 
 	TRACING();
 
+	// Adding a lock here to prevent potential memory dereferencing issues,
+	//as m_screen is utilized across multiple threads
+	KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
 	for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
 
 		UINT ModeCount = 0;
@@ -971,6 +998,7 @@ NTSTATUS VioGpuAdapterLite::GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo)
 				m_screen[i].m_ModeInfo[idx].VisScreenHeight);
 		}
 	}
+	KeReleaseMutex(&m_screen_mutex, FALSE);
 	return Status;
 }
 PAGED_CODE_SEG_END
@@ -1060,12 +1088,15 @@ void VioGpuAdapterLite::ThreadWorkRoutine(void)
 void VioGpuAdapterLite::ConfigChanged(void)
 {
 	TRACING();
+	NTSTATUS status = STATUS_SUCCESS;
 	UINT32 events_read, events_clear = 0;
 	virtio_get_config(&m_VioDev, FIELD_OFFSET(GPU_CONFIG, events_read),
 		&events_read, sizeof(m_u32NumScanouts));
 	if (events_read & VIRTIO_GPU_EVENT_DISPLAY) {
-		for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
-			GetDisplayInfo(i);
+		status = GetModeList(&DisplayInfo);
+		if (!NT_SUCCESS(status)) {
+			ERR("GetModeList failed with %x\n", status);
+			VioGpuDbgBreak();
 		}
 		if (hpd_event) {
 			DBGPRINT("Sending Hot Plug event to UMD\n");
@@ -1074,10 +1105,6 @@ void VioGpuAdapterLite::ConfigChanged(void)
 		events_clear |= VIRTIO_GPU_EVENT_DISPLAY;
 		virtio_set_config(&m_VioDev, FIELD_OFFSET(GPU_CONFIG, events_clear),
 			&events_clear, sizeof(m_u32NumScanouts));
-		//        UpdateChildStatus(FALSE);
-		//        ProcessEdid();
-		// TODO: Enable following if needed
-		//UpdateChildStatus(TRUE);
 	}
 }
 

@@ -195,17 +195,7 @@ NTSTATUS DVServerKMDEvtPrepareHardware(
 	//  The following display info will be passed down from DVServerUMD
 	//  For now, just use hard coded one
 	//
-	DXGK_DISPLAY_INFORMATION DisplayInfo = {
-		1024,
-		768,
-		4096,
-		D3DDDIFMT_X8R8G8B8,
-		0,
-		0,
-		0
-	};
-
-	status = pVioGpuAdapterLite->HWInit(ResourcesTranslated, &DisplayInfo);
+	status = pVioGpuAdapterLite->HWInit(ResourcesTranslated, &pVioGpuAdapterLite->DisplayInfo);
 
 	return status;
 }
@@ -257,7 +247,9 @@ NTSTATUS DVServerKMDEvtD0Entry(
 		restarted, and when it has been powered off.
 
 		Note that interrupts will not be enabled at the time that this is called.
-		They will be enabled after this callback completes.
+		They will be enabled after this callback completes. Added a new callback 
+		DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled, which will ensure 
+		successful enablement of interrupts for subsequent actions.
 
 		This function is not marked pageable because this function is in the
 		device power up path. When a function is marked pagable and the code
@@ -281,24 +273,10 @@ NTSTATUS DVServerKMDEvtD0Entry(
 
 	--*/
 {
-	NTSTATUS status = STATUS_SUCCESS;
-	PDEVICE_CONTEXT pDeviceContext;
-	VioGpuAdapterLite* pVioGpuAdapterLite;
 	TRACING();
+	NTSTATUS status = STATUS_SUCCESS;
 	UNREFERENCED_PARAMETER(PreviousState);
-
-	pDeviceContext = DeviceGetContext(Device);
-
-	//
-	// Retrieve the DVServerKMD device instance
-	//
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
-
-	if (!pVioGpuAdapterLite)
-		return STATUS_UNSUCCESSFUL;
-
-	status = pVioGpuAdapterLite->SetPowerState(PowerDeviceD0);
-
+	UNREFERENCED_PARAMETER(Device);
 	return status;
 }
 
@@ -477,6 +455,50 @@ Return Value:
 	pVioGpuAdapterLite->DestroyFrameBufferCursorObjExt();
 
 	return STATUS_SUCCESS;
+}
+
+NTSTATUS
+DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled(
+	IN WDFDEVICE Device,
+	IN WDF_POWER_DEVICE_STATE PreviousState
+)
+/*++
+
+Routine Description:
+
+	DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled is called by the framework after the
+	driver has enabled the device's hardware interrupts.
+
+Arguments:
+
+	Device - Handle to a framework device object.
+
+	PreviousState - A WDF_POWER_DEVICE_STATE-typed enumerator that identifies the
+				  previous device power state.
+
+Return Value:
+
+	NTSTATUS - Failures will be logged, but not acted on.
+
+--*/
+{
+	TRACING();
+	UNREFERENCED_PARAMETER(PreviousState);
+	NTSTATUS status = STATUS_SUCCESS;
+
+	PDEVICE_CONTEXT pDeviceContext;
+	VioGpuAdapterLite* pVioGpuAdapterLite;
+	pDeviceContext = DeviceGetContext(Device);
+	//
+	// Retrieve the DVServerKMD device instance
+	//
+	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+
+	if (!pVioGpuAdapterLite)
+		return STATUS_UNSUCCESSFUL;
+	status = pVioGpuAdapterLite->SetPowerState(PowerDeviceD0);
+
+	return status;
 }
 
 NTSTATUS DVServerKMDEvtInterruptEnable(

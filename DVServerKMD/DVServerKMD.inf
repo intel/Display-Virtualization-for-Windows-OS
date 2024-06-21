@@ -36,9 +36,9 @@ WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with
 ;*****************************************
 
 [Manufacturer]
-%ManufacturerName%=Standard,NT$ARCH$
+%ManufacturerName%=Standard,NTamd64.10.0...15063
 
-[Standard.NT$ARCH$]
+[Standard.NTamd64.10.0...15063]
 %DVServerKMD.DeviceDesc%=DVServerKMD_Device, PCI\VEN_1AF4&DEV_1050&CC_030000
 
 [DVServerKMD_Device.NT]

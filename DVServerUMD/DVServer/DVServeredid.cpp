@@ -18,7 +18,6 @@ struct screen_info* mdata = NULL;
 ULONG bytesReturned = 0;
 
 unsigned int blacklisted_resolution_list[][2] = { {1400,1050} }; // blacklisted resolution can be appended here
-char* screenedid[MAX_SCAN_OUT] = { "ScreenEDID1", "ScreenEDID2", "ScreenEDID3", "ScreenEDID4" };
 
 /*******************************************************************************
 *
@@ -36,20 +35,52 @@ char* screenedid[MAX_SCAN_OUT] = { "ScreenEDID1", "ScreenEDID2", "ScreenEDID3", 
 * int - 0 == SUCCESS, -1 = ERROR
 *
 ******************************************************************************/
-int get_edid_data(HANDLE devHandle, void* m, DWORD id)
+int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 {
 	TRACING();
 	IndirectSampleMonitor* monitor = (IndirectSampleMonitor*)m;
-	wchar_t* Lscreenedid;
-	BYTE regedid[EDID_SIZE] = { 0 };
-	ULONG buff_size = EDID_SIZE;
 	unsigned int i = 0, edid_mode_index = 0, modeSize;
-	size_t requiredSize = 0;
-	int status = 0;
 
 	if (!devHandle || !m) {
 		ERR("Invalid parameter\n");
 		return DVSERVERUMD_FAILURE;
+	}
+
+	static const struct IndirectSampleMonitor s_SampleMonitors[] =
+		{
+				// 1080 p EDID
+			{
+				{
+					0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00, 0x49, 0x14, 0x34, 0x12, 0x00, 0x00, 0x00, 0x00,
+					0x2a, 0x18, 0x01, 0x04, 0xa5, 0x20, 0x14, 0x78, 0x06, 0xee, 0x91, 0xa3, 0x54, 0x4c, 0x99, 0x26,
+					0x0f, 0x50, 0x54, 0x21, 0x08, 0x00, 0xe1, 0xc0, 0xd1, 0xc0, 0xd1, 0x00, 0xa9, 0x40, 0xb3, 0x00,
+					0x95, 0x00, 0x81, 0x80, 0x81, 0x40, 0xea, 0x29, 0x00, 0xc0, 0x51, 0x20, 0x1c, 0x30, 0x40, 0x26,
+					0x44, 0x40, 0x45, 0xcb, 0x10, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00, 0xf7, 0x00, 0xa0, 0x00, 0x40,
+					0x82, 0x00, 0x28, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfd, 0x00, 0x32,
+					0x7d, 0x1e, 0xa0, 0xff, 0x01, 0x0a, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x00, 0x00, 0x00, 0xfc,
+					0x00, 0x51, 0x45, 0x4d, 0x55, 0x20, 0x4d, 0x6f, 0x6e, 0x69, 0x74, 0x6f, 0x72, 0x0a, 0x01, 0x3a,
+					0x02, 0x03, 0x0b, 0x00, 0x46, 0x7d, 0x65, 0x60, 0x59, 0x1f, 0x61, 0x00, 0x00, 0x00, 0x10, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+					0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x2f
+				},
+				{
+					{ 1920, 1080, 60 },
+					{ 1600, 1200, 60 },
+					{ 1024, 768, 60 },
+				},
+				0
+			},
+		};
+
+	if (d_edid == TRUE) {
+		ERR("get Default EDID for Primary Index monitor \n");
+		memcpy_s(monitor, sizeof(s_SampleMonitors), s_SampleMonitors, sizeof(s_SampleMonitors));
+		return DVSERVERUMD_SUCCESS;
 	}
 
 	edata = (struct edid_info*)malloc(sizeof(struct edid_info));
@@ -60,7 +91,7 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 	SecureZeroMemory(edata, sizeof(struct edid_info));
 	edata->screen_num = id;
 
-	DBGPRINT("Requesting Mode List size through EDID IOCTL\n");
+	DBGPRINT("Requesting Mode List size through EDID IOCTL for screen = %d\n", edata->screen_num);
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_EDID_DATA, edata, sizeof(struct edid_info), edata, sizeof(struct edid_info), &bytesReturned, NULL)) {
 		ERR("IOCTL_DVSERVER_GET_EDID_DATA call failed\n");
 		free(edata);
@@ -86,7 +117,7 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 	}
 	SecureZeroMemory(edata->mode_list, sizeof(struct mode_info) * edata->mode_size);
 
-	DBGPRINT("Requesting EDID Data through EDID IOCTL\n");
+	DBGPRINT("Requesting EDID Data through EDID IOCTL for screen = %d\n", edata->screen_num);
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_EDID_DATA, edata, sizeof(struct edid_info), edata, sizeof(struct edid_info), &bytesReturned, NULL)) {
 		ERR("IOCTL_DVSERVER_GET_EDID_DATA call failed!\n");
 		free(edata->mode_list);
@@ -101,31 +132,7 @@ int get_edid_data(HANDLE devHandle, void* m, DWORD id)
 		return DVSERVERUMD_FAILURE;
 	}
 
-	try {
-		Lscreenedid = new wchar_t[strlen(screenedid[id]) + 1];
-	}
-	catch (const std::bad_alloc e) {
-		ERR("Mode list size is Modified \n");
-		free(edata->mode_list);
-		free(edata);
-		return DVSERVERUMD_FAILURE;
-	}
-	mbstowcs_s(&requiredSize, Lscreenedid, strlen(screenedid[id]) + 1, screenedid[id], strlen(screenedid[id]));
-	if (requiredSize != 0) {
-		DBGPRINT("Screen EDID regkey = %ls", Lscreenedid);
-		status = read_dvserver_registry_binary(Lscreenedid, regedid, &buff_size);
-
-		if (status != DVSERVERUMD_SUCCESS) {
-			DBGPRINT("idd_read_registry_binary Failed, EDID received from KMD will be used");
-			write_dvserver_registry_binary(Lscreenedid, edata->edid_data, EDID_SIZE);
-			memcpy_s(monitor->pEdidBlock, monitor->szEdidBlock, edata->edid_data, monitor->szEdidBlock);
-		} else {
-			DBGPRINT("idd_read_registry_binary Passed, EDID from local registry will be used");
-			memcpy_s(monitor->pEdidBlock, monitor->szEdidBlock, regedid, monitor->szEdidBlock);
-		}
-	}
-	delete[] Lscreenedid;
-
+	memcpy_s(monitor->pEdidBlock, monitor->szEdidBlock, edata->edid_data, monitor->szEdidBlock);
 	monitor->ulPreferredModeIdx = 0;
 
 	DBGPRINT("Modes\n");

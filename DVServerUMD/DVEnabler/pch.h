@@ -25,4 +25,5 @@ struct disp_info {
 	HANDLE mutex;
 };
 int GetDisplayCount(disp_info* pdinfo);
+int IsSystemLocked();
 #endif //PCH_H
