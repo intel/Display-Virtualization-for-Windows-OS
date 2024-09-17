@@ -7,7 +7,24 @@ _When_((PoolType& NonPagedPoolMustSucceed) != 0,
 {
 	Size = (Size != 0) ? Size : 1;
 
-	void* pObject = ExAllocatePoolWithTag(PoolType, Size, VIOGPUTAG);
+	ULONG Flags = 0;
+	switch (PoolType) {
+	case NonPagedPool:
+		Flags = POOL_FLAG_NON_PAGED;
+		break;
+	case PagedPool:
+		Flags = POOL_FLAG_PAGED;
+		break;
+	case NonPagedPoolNx:
+		Flags = POOL_FLAG_NON_PAGED | POOL_FLAG_CACHE_ALIGNED;
+		break;
+	default:
+		// Handle other pool types or set a default flag
+		Flags = POOL_FLAG_NON_PAGED;
+		break;
+	}
+
+	void* pObject = ExAllocatePool2(Flags, Size, VIOGPUTAG);
 
 	if (pObject != NULL)
 	{
@@ -28,7 +45,24 @@ _When_((PoolType& NonPagedPoolMustSucceed) != 0,
 
 	Size = (Size != 0) ? Size : 1;
 
-	void* pObject = ExAllocatePoolWithTag(PoolType, Size, VIOGPUTAG);
+	ULONG Flags = 0;
+	switch (PoolType) {
+	case NonPagedPool:
+		Flags = POOL_FLAG_NON_PAGED;
+		break;
+	case PagedPool:
+		Flags = POOL_FLAG_PAGED;
+		break;
+	case NonPagedPoolNx:
+		Flags = POOL_FLAG_NON_PAGED | POOL_FLAG_CACHE_ALIGNED;
+		break;
+	default:
+		// Handle other pool types or set a default flag
+		Flags = POOL_FLAG_NON_PAGED;
+		break;
+	}
+
+	void* pObject = ExAllocatePool2(Flags, Size, VIOGPUTAG);
 
 	if (pObject != NULL)
 	{

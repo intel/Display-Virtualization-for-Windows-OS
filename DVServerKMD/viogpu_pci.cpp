@@ -129,8 +129,8 @@ ULONGLONG mem_get_physical_address(void* context, void* virt)
 void* mem_alloc_nonpaged_block(void* context, size_t size)
 {
 	UNREFERENCED_PARAMETER(context);
-	PVOID ptr = ExAllocatePoolWithTag(
-		NonPagedPoolNx,
+	PVOID ptr = ExAllocatePool2(
+		POOL_FLAG_NON_PAGED,
 		size,
 		VIOGPUTAG);
 	if (ptr) {
