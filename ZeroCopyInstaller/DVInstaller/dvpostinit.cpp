@@ -11,6 +11,8 @@
 #include "Trace.h"
 #include "dvpostinit.tmh"
 
+static BOOL dvDisplaySwitch();
+
 /*******************************************************************************
 *
 * Description
@@ -185,6 +187,7 @@ static BOOL dvStartDLL()
 	wchar_t* dllCmdPath = nullptr;
 	wchar_t* dllArgPath = nullptr;
 	BOOL result = FALSE;
+	BOOL DisplayPathEnabled = FAIL;
 
 	TRACING();
 	if (!GetSystemDirectory(system32Path, MAX_PATH)) {
@@ -208,13 +211,14 @@ static BOOL dvStartDLL()
 		LocalFree(dllCmdPath);
 		return FALSE;
 	}
-	HINSTANCE hInstance = ShellExecute(NULL, L"open", dllCmdPath, dllArgPath, NULL, SW_SHOWDEFAULT);
-	if ((int)(intptr_t)(hInstance) <= 32) {
-		ERR(" Failed to load DVenabler, last error = %ld", GetLastError());
+	
+	DisplayPathEnabled = dvDisplaySwitch();
+	if (DisplayPathEnabled != SUCCESS) {
+		ERR("Failed to do DisplaySwitch");
 	}
 	else {
 		result = TRUE;
-		DBGPRINT("DVenabler started Successfully by rundll32.exe");
+		DBGPRINT("DisplaySwitch is successful");
 	}
 
 	LocalFree(dllCmdPath);
@@ -321,7 +325,7 @@ static BOOL dvIsUmdLoaded(void)
 *   none.
 *
 ******************************************************************************/
-static void dvDisplaySwitch()
+static BOOL dvDisplaySwitch()
 {
 	DISPLAYCONFIG_TARGET_BASE_TYPE baseType;
 	unsigned int path_count = NULL, mode_count = NULL;
@@ -336,7 +340,7 @@ static void dvDisplaySwitch()
 		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 		ERR("GetDisplayConfigBufferSizes failed with %s. Exiting!!!\n", err);
-		return;
+		return FAIL;
 	}
 
 	try {
@@ -349,7 +353,7 @@ static void dvDisplaySwitch()
 			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 			ERR("QueryDisplayConfig failed with %s. Exiting!!!\n", err);
-			return;
+			return FAIL;
 		}
 		for (auto& activepath_loopindex : path_list) {
 			baseType.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_BASE_TYPE;
@@ -381,12 +385,13 @@ static void dvDisplaySwitch()
 			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 			ERR("SetDisplayConfig failed with %s\n", err);
-			return;
+			return FAIL;
 		}
 	}
 	catch (const std::exception& e) {
 		ERR("an exception occurred while changing the display path");
 	}
+	return SUCCESS;
 }
 
 /*******************************************************************************

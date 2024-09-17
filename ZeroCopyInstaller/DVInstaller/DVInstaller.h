@@ -66,6 +66,9 @@ enum InstallModes {
 #define EXIT_UMD_INF_REMOVAL_FAILED   (4)
 #define EXIT_KMD_INF_REMOVAL_FAILED   (5)
 
+#define SUCCESS 1
+#define FAIL 0
+
 #define DLL_LOADED_MAX_RETRY 10
 #define DV_HWID TEXT("PCI\\VEN_1AF4&DEV_1050&CC_030000")
 #define DVSERVERKMD_INF TEXT("DVServerKMD.inf")

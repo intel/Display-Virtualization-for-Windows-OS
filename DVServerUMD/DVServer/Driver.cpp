@@ -236,6 +236,8 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 {
 	NTSTATUS Status = STATUS_SUCCESS;
 	WDF_PNPPOWER_EVENT_CALLBACKS PnpPowerCallbacks;
+	NTSTATUS status_ver;
+	IDARG_OUT_GETVERSION pOutArgs;
 
 	UNREFERENCED_PARAMETER(Driver);
 	TRACING();
@@ -292,6 +294,11 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	// Create a new device context object and attach it to the WDF device object
 	auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
 	pContext->pContext = new IndirectDeviceContext(Device);
+
+	status_ver = IddCxGetVersion(&pOutArgs);
+	if (status_ver == STATUS_SUCCESS) {
+		DBGPRINT("IDD Version: %ld", pOutArgs.IddCxVersion);
+	}
 
 	g_DevInfo = new DeviceInfo();
 
