@@ -1,7 +1,7 @@
 /*++
 *
 * Copyright (C) 2021 Intel Corporation
-* SPDX-License-Identifier: MS-PL
+* SPDX-License-Identifier: BSD-3-Clause
 
 Module Name:
 
