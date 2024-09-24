@@ -2,7 +2,7 @@
 ; debug.h
 ;----------------------------------------------------------------------------
 ; Copyright (C) 2021 Intel Corporation
-; SPDX-License-Identifier: MS-PL
+; SPDX-License-Identifier: MIT
 ;
 ; File Description:
 ;   This file declares and defines the devserverumd logging macros
