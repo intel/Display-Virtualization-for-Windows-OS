@@ -2,7 +2,7 @@
 ; Tracing.cpp
 ;----------------------------------------------------------------------------
 ; Copyright (C) 2021 Intel Corporation
-; SPDX-License-Identifier: MS-PL
+; SPDX-License-Identifier: MIT
 ;
 ; File Description:
 ;   This file contains function tracing entry and exits calls.
