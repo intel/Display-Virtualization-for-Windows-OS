@@ -1,3 +1,20 @@
+DVServer is a display virtualization driver designed for Windows VMs. The required environment for this solution to function end-to-end includes a Linux host with QEMU hypervisor and a Windows VM. This driver consists of four components.
+ 
+1. DVServerUMD:
+This driver leverages Microsoft IDD (Indirect Display Driver) as its foundational technology to deliver a virtual display for Windows VMs. It retrieves the frame buffer from the OS swapchain buffer and shares the frame buffer address with DVServerKMD. Communication between DVServerUMD and DVServerKMD is facilitated through IOCTLs.
+ 
+2. DVServerKMD:
+This driver employs the VirtIO protocol for communication with the host QEMU hypervisor. The frame buffer address obtained from DVServerUMD is forwarded to the host QEMU hypervisor, which subsequently renders the frames on the host.
+ 
+3. DVEnabler:
+DVEnabler helps disable the MSBDA monitor, allowing the Intel graphics driver to attach to the IDD monitor for executing workloads on the GPU.
+ 
+4. DVInstaller:
+DVInstaller, built on the Inno Setup framework, facilitates the installation of our DVServer driver. It supports both GUI and command-line installation methods.
+ 
+Key Feature Supported by the driver:
+Win10/11 support, Multi monitor, Hot Plug Detect, EDID Management
+
 -----------------------------------------------------------
 #####  Windows VM QEMU CMD Example #####
 -----------------------------------------------------------
