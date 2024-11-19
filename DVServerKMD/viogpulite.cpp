@@ -662,6 +662,7 @@ VOID VioGpuAdapterLite::BlackOutScreen(CURRENT_MODE* pCurrentMod)
 		}
 
 		//FIXME!!! rotation
+		KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
 
 		resid = m_screen[pCurrentMod->DispInfo.TargetId].m_pFrameBuf->GetId();
 
@@ -669,6 +670,7 @@ VOID VioGpuAdapterLite::BlackOutScreen(CURRENT_MODE* pCurrentMod)
 		m_screen[pCurrentMod->DispInfo.TargetId].m_FlushCount++;
 		m_CtrlQueue.ResFlush(resid, pCurrentMod->DispInfo.Width, pCurrentMod->DispInfo.Height, 0, 0, pCurrentMod->DispInfo.TargetId,
 			&m_screen[pCurrentMod->DispInfo.TargetId].m_FlushEvent);
+		KeReleaseMutex(&m_screen_mutex, FALSE);
 	}
 }
 
