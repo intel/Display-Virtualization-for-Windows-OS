@@ -1,0 +1,33 @@
+<!-- DisplayVersionUpdate.xml -->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<PropertyGroup>
+		<FdvserverumdVersion Condition="'$(FdvserverumdVersion)'==''">1.0.0.0</FdvserverumdVersion>
+		<PdvserverumdVersion Condition="'$(PdvserverumdVersion)'==''">1.0.0.0</PdvserverumdVersion>
+	</PropertyGroup>
+
+	<Target Name="UpdateDisplayVersion" BeforeTargets="ClCompile">
+		<PropertyGroup>
+			<VersionFile>DVServer.rc</VersionFile>
+			<FileContent>$([System.IO.File]::ReadAllText('$(VersionFile)'))</FileContent>
+
+			<!-- Split File and Product Versions -->
+			<FileVersionMajor>$([System.String]::Copy($(FdvserverumdVersion)).Split('.')[0])</FileVersionMajor>
+			<FileVersionMinor>$([System.String]::Copy($(FdvserverumdVersion)).Split('.')[1])</FileVersionMinor>
+			<FileVersionBuild>$([System.String]::Copy($(FdvserverumdVersion)).Split('.')[2])</FileVersionBuild>
+			<FileVersionRevision>$([System.String]::Copy($(FdvserverumdVersion)).Split('.')[3])</FileVersionRevision>
+
+			<ProductVersionMajor>$([System.String]::Copy($(PdvserverumdVersion)).Split('.')[0])</ProductVersionMajor>
+			<ProductVersionMinor>$([System.String]::Copy($(PdvserverumdVersion)).Split('.')[1])</ProductVersionMinor>
+			<ProductVersionBuild>$([System.String]::Copy($(PdvserverumdVersion)).Split('.')[2])</ProductVersionBuild>
+			<ProductVersionRevision>$([System.String]::Copy($(PdvserverumdVersion)).Split('.')[3])</ProductVersionRevision>
+
+			<!-- Replace placeholders with commas and periods -->
+			<FileContent>$([System.Text.RegularExpressions.Regex]::Replace($(FileContent), '\$\{FileVersion\}', '$(FileVersionMajor),$(FileVersionMinor),$(FileVersionBuild),$(FileVersionRevision)'))</FileContent>
+			<FileContent>$([System.Text.RegularExpressions.Regex]::Replace($(FileContent), '\$\{ProductVersion\}', '$(ProductVersionMajor),$(ProductVersionMinor),$(ProductVersionBuild),$(ProductVersionRevision)'))</FileContent>
+			<FileContent>$([System.Text.RegularExpressions.Regex]::Replace($(FileContent), '\$\{ProductVersionString\}', '$(PdvserverumdVersion)'))</FileContent>
+		</PropertyGroup>
+
+		<!-- Write updated content back to the .rc file -->
+		<WriteLinesToFile File="$(VersionFile)" Lines="$(FileContent)" Overwrite="true"/>
+	</Target>
+</Project>

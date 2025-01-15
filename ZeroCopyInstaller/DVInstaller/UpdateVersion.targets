@@ -1,0 +1,33 @@
+<!-- DisplayVersionUpdate.xml -->
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<PropertyGroup>
+		<FdvInstaller Condition="'$(FdvInstaller)'==''">1.0.0.0</FdvInstaller>
+		<PdvInstaller Condition="'$(PdvInstaller)'==''">1.0.0.0</PdvInstaller>
+	</PropertyGroup>
+
+	<Target Name="UpdateDisplayVersion" BeforeTargets="ClCompile">
+		<PropertyGroup>
+			<VersionFile>DVInstaller.rc</VersionFile>
+			<FileContent>$([System.IO.File]::ReadAllText('$(VersionFile)'))</FileContent>
+
+			<!-- Split File and Product Versions -->
+			<FileVersionMajor>$([System.String]::Copy($(FdvInstaller)).Split('.')[0])</FileVersionMajor>
+			<FileVersionMinor>$([System.String]::Copy($(FdvInstaller)).Split('.')[1])</FileVersionMinor>
+			<FileVersionBuild>$([System.String]::Copy($(FdvInstaller)).Split('.')[2])</FileVersionBuild>
+			<FileVersionRevision>$([System.String]::Copy($(FdvInstaller)).Split('.')[3])</FileVersionRevision>
+
+			<ProductVersionMajor>$([System.String]::Copy($(PdvInstaller)).Split('.')[0])</ProductVersionMajor>
+			<ProductVersionMinor>$([System.String]::Copy($(PdvInstaller)).Split('.')[1])</ProductVersionMinor>
+			<ProductVersionBuild>$([System.String]::Copy($(PdvInstaller)).Split('.')[2])</ProductVersionBuild>
+			<ProductVersionRevision>$([System.String]::Copy($(PdvInstaller)).Split('.')[3])</ProductVersionRevision>
+
+			<!-- Replace placeholders with commas and periods -->
+			<FileContent>$([System.Text.RegularExpressions.Regex]::Replace($(FileContent), '\$\{FileVersion\}', '$(FileVersionMajor),$(FileVersionMinor),$(FileVersionBuild),$(FileVersionRevision)'))</FileContent>
+			<FileContent>$([System.Text.RegularExpressions.Regex]::Replace($(FileContent), '\$\{ProductVersion\}', '$(ProductVersionMajor),$(ProductVersionMinor),$(ProductVersionBuild),$(ProductVersionRevision)'))</FileContent>
+			<FileContent>$([System.Text.RegularExpressions.Regex]::Replace($(FileContent), '\$\{ProductVersionString\}', '$(PdvInstaller)'))</FileContent>
+		</PropertyGroup>
+
+		<!-- Write updated content back to the .rc file -->
+		<WriteLinesToFile File="$(VersionFile)" Lines="$(FileContent)" Overwrite="true"/>
+	</Target>
+</Project>

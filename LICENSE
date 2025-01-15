@@ -1,9 +1,9 @@
 NOTICE
+
 This package contains various components, each of which are subject to 
 different copyright and licensing terms.
 
 --------------------------------------------------------------------------
-
 MS-PL License
 Applicable components:
 DVServerUMD
@@ -13,42 +13,55 @@ Copyright (C) 2021-2024 Intel Corporation
 This license governs use of the accompanying software. If you use the software, 
 you accept this license. If you do not accept the license, do not use the 
 software.
+
 1. Definitions
-The terms ìreproduce,î ìreproduction,î ìderivative works,î and ìdistributionî 
+The terms ‚Äúreproduce,‚Äù ‚Äúreproduction,‚Äù ‚Äúderivative works,‚Äù and ‚Äúdistribution‚Äù 
 have the same meaning here as under U.S. copyright law.
-A ìcontributionî is the original software, or any additions or changes to the 
+
+A ‚Äúcontribution‚Äù is the original software, or any additions or changes to the 
 software.
-A ìcontributorî is any person that distributes its contribution under this 
+
+A ‚Äúcontributor‚Äù is any person that distributes its contribution under this 
 license.
-ìLicensed patentsî are a contributorís patent claims that read directly on its 
+
+‚ÄúLicensed patents‚Äù are a contributor‚Äôs patent claims that read directly on its 
 contribution.
+
 2. Grant of Rights
+
 (A) Copyright Grant- Subject to the terms of this license, including the 
 license conditions and limitations in section 3, each contributor grants you a 
 non-exclusive, worldwide, royalty-free copyright license to reproduce its 
 contribution, prepare derivative works of its contribution, and distribute its 
 contribution or any derivative works that you create.
+
 (B) Patent Grant- Subject to the terms of this license, including the license 
 conditions and limitations in section 3, each contributor grants you a 
 non-exclusive, worldwide, royalty-free license under its licensed patents to 
 make, have made, use, sell, offer for sale, import, and/or otherwise dispose of 
 its contribution in the software or derivative works of the contribution in the 
 software.
+
 3. Conditions and Limitations
+
 (A) No Trademark License- This license does not grant you rights to use any 
-contributorsí name, logo, or trademarks.
+contributors‚Äô name, logo, or trademarks.
+
 (B) If you bring a patent claim against any contributor over patents that you 
 claim are infringed by the software, your patent license from such contributor 
 to the software ends automatically.
+
 (C) If you distribute any portion of the software, you must retain all 
 copyright, patent, trademark, and attribution notices that are present in the 
 software.
+
 (D) If you distribute any portion of the software in source code form, you may 
 do so only under this license by including a complete copy of this license with 
 your distribution. If you distribute any portion of the software in compiled or 
 object code form, you may only do so under a license that complies with this 
 license.
-(E) The software is licensed ìas-is.î You bear the risk of using it. The 
+
+(E) The software is licensed ‚Äúas-is.‚Äù You bear the risk of using it. The 
 contributors give no express warranties, guarantees or conditions. You may have 
 additional consumer rights under your local laws which this license cannot 
 change. To the extent permitted under your local laws, the contributors exclude 
@@ -58,7 +71,6 @@ non-infringement.
 SPDX-License-Identifier: MS-PL
 
 --------------------------------------------------------------------------
-
 BSD-3-Clause License
 Applicable components:
 DVServerKMD
@@ -67,15 +79,19 @@ Copyright (C) 2021-2024 Intel Corporation
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions are met:
+
 1. Redistributions of source code must retain the above copyright notice, this 
 list of conditions and the following disclaimer.
+
 2. Redistributions in binary form must reproduce the above copyright notice, 
 this list of conditions and the following disclaimer in the documentation and/
 or other materials provided with the distribution.
+
 3. Neither the name of the copyright holder nor the names of its contributors 
 may be used to endorse or promote products derived from this software without 
 specific prior written permission.
-THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ìAS ISî AND 
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS ‚ÄúAS IS‚Äù AND 
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED 
 WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
 DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE 
@@ -89,7 +105,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 SPDX-License-Identifier: BSD-3-Clause
 
 --------------------------------------------------------------------------
-
 MIT License
 Applicable components:
 EDID Parser Lib
@@ -97,7 +112,7 @@ DVEnabler
 Scripts
 DVInstaller (GUI)
 
-Copyright © 2021-2024 Intel Corporation
+Copyright ¬© 2021-2024 Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy of 
 this software and associated documentation files (the "Software"), to deal in 
@@ -105,8 +120,10 @@ the Software without restriction, including without limitation the rights to
 use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies 
 of the Software, and to permit persons to whom the Software is furnished to do 
 so, subject to the following conditions:
+
 The above copyright notice and this permission notice shall be included in all 
 copies or substantial portions of the Software.
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR 
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, 
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE 
