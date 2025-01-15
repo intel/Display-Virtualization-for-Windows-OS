@@ -1,0 +1,32 @@
+/*===========================================================================
+; DVServerKMD.rc
+;----------------------------------------------------------------------------
+; Copyright (C) 2021 Intel Corporation
+; SPDX-License-Identifier: BSD-3-Clause
+;
+; File Description:
+;   This file will have the DVServerKMD resources 
+;--------------------------------------------------------------------------*/
+
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION ${FileVersion}
+PRODUCTVERSION ${ProductVersion}
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileVersion", "${FileVersion}"
+            VALUE "ProductVersion", "${ProductVersionString}"
+            VALUE "ProductName", "DVServerKMD.dll"     
+	    VALUE "LegalCopyright", "Copyright (C) 2021 Intel Corporation"
+            VALUE "FileDescription", "Display Virtualization Kernel Mode Driver" 
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

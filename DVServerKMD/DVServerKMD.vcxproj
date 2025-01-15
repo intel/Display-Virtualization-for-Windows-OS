@@ -12,6 +12,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
+    <None Include="UpdateVersion.targets" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="baseobj.cpp" />
@@ -145,7 +146,11 @@ certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
   <ItemGroup>
     <Text Include="DVServerKMD_Version.txt" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="DVServerKMD.rc" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Import Project="UpdateVersion.targets" />
 </Project>

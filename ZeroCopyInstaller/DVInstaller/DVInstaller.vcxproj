@@ -163,7 +163,14 @@
     <ClCompile Include="dvinstaller.cpp" />
     <ClCompile Include="dvpostinit.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="DVInstaller.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="UpdateVersion.targets" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <Import Project="UpdateVersion.targets" />
 </Project>

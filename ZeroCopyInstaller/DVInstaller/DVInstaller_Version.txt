@@ -1,0 +1,11 @@
+/*===========================================================================
+; DVInstaller_Version.txt
+;----------------------------------------------------------------------------
+; Copyright (C) 2021 Intel Corporation
+; SPDX-License-Identifier: MIT
+;
+; File Description:
+;   This file will have the DVInstaller version 
+;--------------------------------------------------------------------------*/
+
+DVInstaller_Version = 1.0.0

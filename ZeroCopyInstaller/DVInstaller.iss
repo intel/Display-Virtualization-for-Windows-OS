@@ -10,7 +10,9 @@
 ; (To generate a new GUID, click Tools | Generate GUID inside the IDE.)
 AppId={{769FF432-2F41-473A-B54D-183036E27F01}
 AppName=ZeroCopy
-AppVersion=1.0
+AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyVersionInfoVersion}
+VersionInfoCopyright=Copyright (C) 2021 Intel Corporation
 AppPublisher=intel
 CreateAppDir=no
 AppPublisherURL="https://www.intel.com/
