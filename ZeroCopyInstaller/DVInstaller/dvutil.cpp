@@ -276,9 +276,10 @@ int dvLoadUnloadNewdevLib(HMODULE* newdevMod, BOOL isLoad)
 		return EXIT_FAIL;
 	}
 	if (isLoad) {
-		*newdevMod = LoadLibrary(TEXT("newdev.dll"));
+		*newdevMod = LoadLibraryEx(TEXT("newdev.dll"), NULL, LOAD_LIBRARY_SEARCH_SYSTEM32);
 		if (!*newdevMod) {
-			ERR("\nFailed to load NewdevLib \n");
+			DWORD dwError = GetLastError();
+			ERR("\nFailed to load NewdevLib. Error code: %lu\n", dwError);
 			return EXIT_FAIL;
 		}
 	}
