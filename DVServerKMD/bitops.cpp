@@ -162,6 +162,13 @@ VOID CopyBits32_32(
 
 		for (UINT i = 0; i < NumRows; ++i) {
 			RtlCopyMemory(pStartDst, pStartSrc, BytesToCopy);
+			for (UINT j = 0; j < NumPixels; j++) {
+				RtlCopyMemory(&pStartDst[j * 4], &pStartSrc[j * 4], 4);
+				if (pDst->PixelFmt == D3DDDIFMT_A8B8G8R8 && pSrc->PixelFmt == D3DDDIFMT_A8R8G8B8) {
+					pStartDst[j * 4] = pStartSrc[j * 4 + 2];
+					pStartDst[j * 4 + 2] = pStartSrc[j * 4];
+				}
+			}
 			pStartDst += pDst->Pitch;
 			pStartSrc += pSrc->Pitch;
 		}
@@ -203,6 +210,7 @@ UINT BPPFromPixelFormat(D3DDDIFORMAT Format)
 	case D3DDDIFMT_R5G6B5: return 16;
 	case D3DDDIFMT_R8G8B8: return 24;
 	case D3DDDIFMT_X8R8G8B8:
+	case D3DDDIFMT_A8B8G8R8:
 	case D3DDDIFMT_A8R8G8B8: return 32;
 	default: VIOGPU_LOG_ASSERTION1("Unknown D3DDDIFORMAT 0x%I64x", Format); return 0;
 	}

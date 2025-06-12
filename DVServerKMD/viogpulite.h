@@ -79,6 +79,12 @@ typedef struct _CURRENT_MODE
 	} FrameBuffer;
 } CURRENT_MODE;
 
+typedef struct _POINTER_SHAPE {
+	UINT X;
+	UINT Y;
+	DXGKARG_SETPOINTERSHAPE pointer;
+} POINTER_SHAPE;
+
 class ScreenInfo {
 public:
 	PVIDEO_MODE_INFORMATION m_ModeInfo;
@@ -94,6 +100,8 @@ public:
 	KEVENT m_FlushEvent;
 	VioGpuMemSegment m_FrameSegment;
 	VioGpuObj* m_pFrameBuf;
+	VioGpuObj * m_pCursorBuf;
+	VioGpuMemSegment m_CursorSegment;
 	BOOL m_FlushCount;
 	BOOL enabled;
 
@@ -121,8 +129,8 @@ public:
 	virtual VOID DpcRoutine(void) = 0;
 	virtual VOID ResetDevice(void) = 0;
 	virtual VOID BlackOutScreen(CURRENT_MODE* pCurrentMod) = 0;
-	virtual NTSTATUS SetPointerShape(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pModeCur) = 0;
-	virtual NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition, _In_ CONST CURRENT_MODE* pModeCur) = 0;
+	virtual NTSTATUS SetPointerShape(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf, _In_ CONST UINT cv) = 0;
+	virtual NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition) = 0;
 	ULONG GetInstanceId(void) { return m_Id; }
 	PVOID GetVioGpu(void) { return m_pvDeviceContext; }
 	virtual PBYTE GetEdidData(UINT Idx) = 0;
@@ -168,8 +176,8 @@ public:
 	BOOLEAN InterruptRoutine(_In_  ULONG MessageNumber);
 	VOID DpcRoutine(void);
 	VOID ResetDevice(VOID);
-	NTSTATUS SetPointerShape(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pModeCur);
-	NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition, _In_ CONST CURRENT_MODE* pModeCur);
+	NTSTATUS SetPointerShape(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf, _In_ CONST UINT cv);
+	NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition);
 	CPciResources* GetPciResources(void) { return &m_PciResources; }
 	BOOLEAN IsMSIEnabled() { return m_PciResources.IsMSIEnabled(); }
 	PHYSICAL_ADDRESS GetFrameBufferPA(void) { return  m_PciResources.GetPciBar(0)->GetPA(); }
@@ -205,8 +213,8 @@ private:
 	void AddEdidModes(UINT32 screen_num);
 	void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE* pCurrentMode);
 	void DestroyFrameBufferObj(UINT32 screen_num, BOOLEAN bReset);
-	BOOLEAN CreateCursor(_In_ CONST DXGKARG_SETPOINTERSHAPE* pSetPointerShape, _In_ CONST CURRENT_MODE* pCurrentMode);
-	void DestroyCursor(void);
+	BOOLEAN CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf);
+	void DestroyCursor(UINT32 screen_num);
 	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
 	void static ThreadWork(_In_ PVOID Context);
 	void ThreadWorkRoutine(void);
@@ -223,8 +231,6 @@ private:
 	CrsrQueue m_CursorQueue;
 	VioGpuBuf m_GpuBuf;
 	VioGpuIdr m_Idr;
-	VioGpuObj* m_pCursorBuf;
-	VioGpuMemSegment m_CursorSegment;
 	volatile ULONG m_PendingWorks;
 	KEVENT m_ConfigUpdateEvent;
 	PETHREAD m_pWorkThread;

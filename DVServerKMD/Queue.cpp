@@ -127,7 +127,6 @@ Return Value:
 {
 	NTSTATUS status = STATUS_SUCCESS;
 	size_t bufSize;
-	struct CursorData* cptr = NULL;
 	struct KMDF_IOCTL_Response* resp = NULL;
 	WDFDEVICE Device = WdfIoQueueGetDevice(Queue);
 	PDEVICE_CONTEXT pDeviceContext = DeviceGetContext(Device);
@@ -169,14 +168,32 @@ Return Value:
 
 
 	case IOCTL_DVSERVER_CURSOR_DATA:
-		status = WdfRequestRetrieveInputBuffer(Request, 0, (PVOID*)&cptr, &bufSize);
+
+		status = IoctlSetPointerShape(pDeviceContext, InputBufferLength, Request);
+		if (status != STATUS_SUCCESS) {
+			ERR("IoctlSetPointerShape failed with status = %d\n", status);
+			return;
+		}
+
+		status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&resp, &bufSize);
 		if (!NT_SUCCESS(status)) {
-			ERR("Couldn't retrieve Input buffer\n");
+			ERR("Couldn't retrieve Output buffer\n");
 			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
 			return;
 		}
 
-		PRINT_CURSOR_DATA(("x=%d, y=%d", cptr->cursor_x, cptr->cursor_y));
+		//Return value from the KMDF DVServer
+		resp->retval = DVSERVERKMD_SUCCESS;
+		WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
+		break;
+
+	case IOCTL_DVSERVER_CURSOR_POS:
+		status = IoctlSetPointerPosition(pDeviceContext, InputBufferLength, Request);
+		if (status != STATUS_SUCCESS) {
+			ERR("IoctlSetPointerPosition failed with status = %d\n", status);
+			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+			return;
+		}
 
 		status = WdfRequestRetrieveOutputBuffer(Request, 0, (PVOID*)&resp, &bufSize);
 		if (!NT_SUCCESS(status)) {
@@ -588,5 +605,101 @@ static NTSTATUS IoctlRequestHPEventInfo(
 	pAdapter->FillPresentStatus(info);
 	WdfRequestSetInformation(Request, sizeof(struct hp_info));
 
+	return STATUS_SUCCESS;
+}
+
+static NTSTATUS IoctlSetPointerShape(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const WDFREQUEST      Request)
+{
+	POINTER_SHAPE pointerShape;
+	struct CursorData* cptr = NULL;
+	size_t bufSize;
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+	TRACING();
+
+	VioGpuAdapterLite* pAdapter =
+		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : nullptr);
+
+	if (!pAdapter) {
+		ERR("Couldnt' find adapter\n");
+		return status;
+	}
+
+	status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, (PVOID*)&cptr, &bufSize);
+	if (!NT_SUCCESS(status)) {
+		ERR("Couldn't retrieve Input buffer\n");
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INVALID_USER_BUFFER;
+	}
+
+	if (cptr == NULL) {
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	RtlZeroMemory(&pointerShape, sizeof(POINTER_SHAPE));
+	pointerShape.pointer.VidPnSourceId = cptr->screen_num;
+	pointerShape.pointer.Height = cptr->height;
+	pointerShape.pointer.Width = cptr->width;
+	pointerShape.pointer.Pitch = cptr->pitch;
+	pointerShape.pointer.pPixels = cptr->data;
+	pointerShape.pointer.XHot = cptr->x_hot;
+	pointerShape.pointer.YHot = cptr->y_hot;
+	pointerShape.X = cptr->cursor_x;
+	pointerShape.Y = cptr->cursor_y;
+
+	status = pAdapter->SetPointerShape(&pointerShape, cptr->color_format, cptr->iscursorvisible);
+
+	if (status != STATUS_SUCCESS) {
+		ERR("SetPointerShape failed with status = %d\n", status);
+		return STATUS_UNSUCCESSFUL;
+	}
+	return STATUS_SUCCESS;
+}
+
+static NTSTATUS IoctlSetPointerPosition(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const WDFREQUEST      Request)
+{
+	DXGKARG_SETPOINTERPOSITION pointerPosition;
+	struct CursorData* cptr = NULL;
+	size_t bufSize;
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+	TRACING();
+
+	VioGpuAdapterLite* pAdapter =
+		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
+
+	if (!pAdapter) {
+		ERR("Couldnt' find adapter\n");
+		return status;
+	}
+
+	status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, (PVOID*)&cptr, &bufSize);
+	if (!NT_SUCCESS(status)) {
+		ERR("Couldn't retrieve Input buffer\n");
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INVALID_USER_BUFFER;
+	}
+
+	if (cptr == NULL) {
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	RtlZeroMemory(&pointerPosition, sizeof(DXGKARG_SETPOINTERPOSITION));
+	pointerPosition.X = cptr->cursor_x;
+	pointerPosition.Y = cptr->cursor_y;
+	pointerPosition.VidPnSourceId = cptr->screen_num;
+
+	status = pAdapter->SetPointerPosition(&pointerPosition);
+
+	if (status != STATUS_SUCCESS) {
+		ERR("SetPointerPosition failed with status = %d\n", status);
+		return STATUS_UNSUCCESSFUL;
+	}
 	return STATUS_SUCCESS;
 }

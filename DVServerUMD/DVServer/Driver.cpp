@@ -44,6 +44,9 @@ HANDLE g_hpdthread_handle = NULL;
 
 IDDCX_MONITOR g_monitorobject_list[MAX_SCAN_OUT] = { 0 };
 
+BOOL hwcursorsupported = TRUE;
+int idd_version;
+
 #pragma region SampleMonitors
 
 DWORD dvserver_monitor_count = 1;
@@ -57,21 +60,15 @@ static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultMode
 	{ 1024,  768, 75 },
 };
 
-#ifdef DVSERVER_HWDCURSOR
-
-IDDCX_MONITOR m_IddCxMonitorObject;
-IDARG_IN_QUERY_HWCURSOR g_inputargs = { 0 };
-Microsoft::WRL::Wrappers::Event g_iddcursor_os_event;
-HANDLE cursor_event = NULL;
-HANDLE devHandle_cursor;
+IDDCX_MONITOR g_DvserverCxMonitorObject[MAX_SCAN_OUT] = { 0 };
+IDARG_IN_QUERY_HWCURSOR g_inputargs[MAX_SCAN_OUT] = { 0 };
+Microsoft::WRL::Wrappers::Event g_dvserver_cursor_os_event[MAX_SCAN_OUT];
 
 #define CURSOR_BUFFER_SIZE				128*1024
 #define CURSOR_MAX_WIDTH				32
 #define CURSOR_MAX_HEIGHT				32
 #define INITIAL_CURSOR_SHAPE_ID			0
-#define IDD_CURSOREVENT_WAIT_TIMEOUT	16 // 16ms wait timeout for the IDD cursor event
-
-#endif //end of DVSERVER_HWDCURSOR
+#define DVSERVER_CURSOREVENT_WAIT_TIMEOUT	16 // 16ms wait timeout for the IDD cursor event
 
 #pragma endregion
 
@@ -297,6 +294,7 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 
 	status_ver = IddCxGetVersion(&pOutArgs);
 	if (status_ver == STATUS_SUCCESS) {
+		idd_version = pOutArgs.IddCxVersion;
 		DBGPRINT("IDD Version: %ld", pOutArgs.IddCxVersion);
 	}
 
@@ -508,6 +506,10 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 
 	m_hTerminateEvent.Attach(CreateEvent(nullptr, FALSE, FALSE, nullptr));
 
+	if (hwcursorsupported == TRUE) {
+		m_hTerminateCursorEvent.Attach(CreateEvent(nullptr, FALSE, FALSE, nullptr));
+	}
+
 	//Allocate memory for IOCTL Response Buffer from DVServerKMD (for frame)
 	m_ioctlresp_frame = (struct KMDF_IOCTL_Response*)malloc(sizeof(struct KMDF_IOCTL_Response));
 	if (m_ioctlresp_frame == NULL) {
@@ -534,38 +536,29 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 	// Immediately create and run the swap-chain processing thread, passing 'this' as the thread parameter
 	m_hThread.Attach(CreateThread(nullptr, 0, RunThread, this, 0, nullptr));
 
-#ifdef DVSERVER_HWDCURSOR
-	// ****** Cursor Resources ******
-	//Create Device cursor Handle to DVServerKMD
-	devHandle_cursor = CreateFile(device_iface_data->DevicePath, 0, 0, NULL, OPEN_EXISTING, 0, 0);
-	if (devHandle_cursor == INVALID_HANDLE_VALUE) {
-		ERR("CreateFile for cursor returned INVALID_HANDLE_VALUE\n");
-		goto exit;
+
+	if (hwcursorsupported == TRUE) {
+		// ****** Cursor Resources ******
+		//Allocate memory for IOCTL Response Buffer from DVServerKMD (for cursor)
+		m_ioctlresp_cursor = (struct KMDF_IOCTL_Response*)malloc(sizeof(struct KMDF_IOCTL_Response));
+		if (m_ioctlresp_cursor == NULL) {
+			ERR("Failed allocating IOCTL Response structure (for cursor) !!!\n");
+			goto exit;
+		}
+
+		//Allocate memory for Cursor Data pointer
+		m_cursordata = (struct CursorData*)malloc(sizeof(struct CursorData));
+		if (m_cursordata == NULL) {
+			ERR("Failed allocating cursor structure !!!\n");
+			goto exit;
+		}
+
+		//Create DVServer Cursor Thread
+		m_hCursorThread.Attach(CreateThread(nullptr, 0, CursorThread, this, 0, nullptr));
 	}
 
-	//Allocate memory for IOCTL Response Buffer from DVServerKMD (for cursor)
-	m_ioctlresp_cursor = (struct KMDF_IOCTL_Response*)malloc(sizeof(struct KMDF_IOCTL_Response));
-	if (m_ioctlresp_cursor == NULL) {
-		ERR("Failed allocating IOCTL Response structure (for cursor) !!!\n");
-		goto exit;
-	}
 
-	//Allocate memory for Cursor Data pointer
-	m_cursordata = (struct CursorData*)malloc(sizeof(struct CursorData));
-	if (m_cursordata == NULL) {
-		ERR("Failed allocating cursor structure !!!\n");
-		goto exit;
-	}
-
-	//Create DVServer Cursor Thread
-	cursorthread_handle = CreateThread(nullptr, 0, CursorThread, this, 0, nullptr);
-	if (cursorthread_handle == INVALID_HANDLE_VALUE) {
-		ERR("Failed creating cursor thread !!!\n");
-		goto exit;
-	}
-#endif //end of DVSERVER_HWDCURSOR
-
-	DBGPRINT("Init Resources Successful!!!\n");
+	DBGPRINT("Init Resources Successful - Thread Creation Success !!!\n");
 	return;
 
 exit:
@@ -578,11 +571,20 @@ SwapChainProcessor::~SwapChainProcessor()
 	TRACING();
 	// Alert the swap-chain processing thread to terminate
 	SetEvent(m_hTerminateEvent.Get());
+	if (hwcursorsupported == TRUE) {
+		SetEvent(m_hTerminateCursorEvent.Get());
+	}
 
 	if (m_hThread.Get())
 	{
 		// Wait for the thread to terminate
 		WaitForSingleObject(m_hThread.Get(), INFINITE);
+	}
+
+	if (m_hCursorThread.Get())
+	{
+		// Wait for the thread to terminate
+		WaitForSingleObject(m_hCursorThread.Get(), INFINITE);
 	}
 
 	//Cleanup other supporting resources
@@ -624,23 +626,22 @@ void SwapChainProcessor::cleanup_resources()
 		m_destimage->Release();
 	}
 
-#ifdef DVSERVER_HWDCURSOR
 	// ****** Cursor Resources ******
-	if (devHandle_cursor != INVALID_HANDLE_VALUE)
-		CloseHandle(devHandle_cursor);
-
-	if (m_cursordata != INVALID_HANDLE_VALUE)
+	if (m_cursordata != NULL) {
 		free(m_cursordata);
+	}
 
-	if (m_ioctlresp_cursor != INVALID_HANDLE_VALUE)
+	if (m_ioctlresp_cursor != NULL) {
 		free(m_ioctlresp_cursor);
+	}
 
-	if (g_inputargs.pShapeBuffer != INVALID_HANDLE_VALUE)
-		free(g_inputargs.pShapeBuffer);
+	if (g_inputargs[m_screen_num].pShapeBuffer != NULL) {
+		free(g_inputargs[m_screen_num].pShapeBuffer);
+	}
 
-	if (cursorthread_handle != INVALID_HANDLE_VALUE)
-		CloseHandle(cursorthread_handle);
-#endif //end of DVSERVER_HWDCURSOR 
+	if (m_cursorthread_handle != INVALID_HANDLE_VALUE) {
+		CloseHandle(m_cursorthread_handle);
+	}
 }
 
 /*******************************************************************************
@@ -677,23 +678,19 @@ void SwapChainProcessor::init()
 	m_staging_buffer.DepthPitch = 0;
 	m_staging_buffer.RowPitch = 0;
 	m_GPUResourceMutex = NULL;
+	m_cursorthread_handle = NULL;
+	m_ioctlresp_cursor = NULL;
 }
 
 
-#ifdef DVSERVER_HWDCURSOR
 DWORD CALLBACK SwapChainProcessor::CursorThread(LPVOID Argument)
 {
 	//Setting the cursor thread priority to HIGH; Runcore thread will get more priority from OS, inorder to see smooth cursor movement 
 	//we are rasing the cursor thread priority to HIGH and we will be waiting for OS to send cursor events 
-	if (!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_HIGHEST)) {
-		ERR("Failed to set the thread priority to THREAD_PRIORITY_HIGHEST\n");
-		return GetLastError();
-	}
 	reinterpret_cast<SwapChainProcessor*>(Argument)->GetCursorData();
 
 	return 0;
 }
-#endif
 
 DWORD CALLBACK SwapChainProcessor::RunThread(LPVOID Argument)
 {
@@ -769,9 +766,29 @@ void SwapChainProcessor::RunCore()
 				m_hTerminateEvent.Get()
 			};
 			DWORD WaitResult = WaitForMultipleObjects(ARRAYSIZE(WaitHandles), WaitHandles, FALSE, 16);
-			if (WaitResult == WAIT_OBJECT_0 || WaitResult == WAIT_TIMEOUT)
+			if (WaitResult == WAIT_OBJECT_0)
 			{
 				// We have a new buffer, so try the AcquireBuffer again
+				continue;
+			}
+			else if (WaitResult == WAIT_TIMEOUT)
+			{
+				// No new buffer, so use old buffer
+				if (AcquiredBackupBuffer)
+				{
+					status = AcquiredBackupBuffer->QueryInterface(IID_PPV_ARGS(&m_IAcquiredDesktopBackupImage));
+					if (FAILED(status)) {
+						ERR("Failed QueryInterface %d\n", status);
+						AcquiredBackupBuffer.Reset();
+						break;
+					}
+					if (GetFrameData(m_Device, m_IAcquiredDesktopBackupImage) == DVSERVERUMD_FAILURE) {
+						ERR("Failed getting frame from GPU\n");
+						AcquiredBackupBuffer.Reset();
+						break;
+					}
+				}
+				// We might have new buffer, so try the AcquireBuffer again
 				continue;
 			}
 			else if (WaitResult == WAIT_OBJECT_0 + 1)
@@ -802,6 +819,10 @@ void SwapChainProcessor::RunCore()
 					AcquiredBuffer.Reset();
 					break;
 				}
+				if (AcquiredBackupBuffer) {
+					AcquiredBackupBuffer.Reset();
+				}
+				AcquiredBackupBuffer = Buffer.MetaData.pSurface;
 
 				//Get Frame	from GPU
 				if (GetFrameData(m_Device, m_IAcquiredDesktopImage) == DVSERVERUMD_FAILURE) {
@@ -1026,42 +1047,51 @@ void SwapChainProcessor::report_frame_statistics(IDARG_OUT_RELEASEANDACQUIREBUFF
 	IddCxSwapChainReportFrameStatistics(m_hSwapChain, &ReportStatsIn);
 }
 
-#ifdef DVSERVER_HWDCURSOR
 void SwapChainProcessor::GetCursorData()
 {
-	HRESULT status;
 	DWORD WaitResult;
+
+	UINT tempshapeid = UINT_MAX;
+	UINT tempposid = UINT_MAX;
+	INT tempX = UINT_MAX;
+	INT tempY = UINT_MAX;
 
 	while (1) {
 		if (g_init_kmd_resources == TRUE)
 		{
+			HANDLE WaitHandles[] =
+			{
+				g_dvserver_cursor_os_event[m_screen_num].Get(),
+				m_hTerminateCursorEvent.Get()
+			};
 			/* wait for 16ms to get the cursor events from OS */
-			WaitResult = WaitForSingleObject(g_iddcursor_os_event.Get(), IDD_CURSOREVENT_WAIT_TIMEOUT);
+			WaitResult = WaitForMultipleObjects(ARRAYSIZE(WaitHandles), WaitHandles, FALSE, DVSERVER_CURSOREVENT_WAIT_TIMEOUT);
 			if (WaitResult == WAIT_OBJECT_0) {
-				status = IddCxMonitorQueryHardwareCursor(m_IddCxMonitorObject, &g_inputargs, &m_outputargs);
-				if (!NT_SUCCESS(status)) {
-					ERR("Failed IddCxMonitorQueryHardwareCursor\n");
-					//We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
-					continue;
+				//Since IddCxMonitorQueryHardwareCursor2 is supported from IDD 1.7 onward.
+				// Older OS versions like Windows 10 are still limited to earlier versions, they only support IddCxMonitorQueryHardwareCursor.
+				// This check will identify the IDD version supported by the current OS and select the appropriate API call accordingly.
+				if (idd_version < IDDCX_VERSION_IRON) {
+					ProcessCursorDataLegacy(&tempshapeid, &tempX, &tempY);
 				}
-				else { //Success
-					m_cursordata->cursor_x = m_outputargs.X;
-					m_cursordata->cursor_y = m_outputargs.Y;
-					m_cursordata->width = m_outputargs.CursorShapeInfo.Width;
-					m_cursordata->height = m_outputargs.CursorShapeInfo.Height;
-					//<< ToDo - for now we are sending cursor co-oridantes, later we will send the ptr data also >>
-
-					if (!DeviceIoControl(devHandle_cursor, IOCTL_DVSERVER_CURSOR_DATA, \
-						m_cursordata, sizeof(struct CursorData), \
-						m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
-						& m_ioctlresp_size, NULL)) {
-						ERR("IOCTL_DVSERVER_CURSOR_DATA call failed!\n");
-					}
+				else {
+					ProcessCursorData(&tempshapeid, &tempposid, &tempX, &tempY);
 				}
+			}
+			else if (WaitResult == WAIT_OBJECT_0 + 1) {
+				// We need to terminate
+				break;
+			}
+			else if (WaitResult == WAIT_FAILED) {
+				// We need to terminate
+				break;
 			}
 			else if (WaitResult == WAIT_ABANDONED) {
 				// We need to terminate
 				break;
+			}
+			else if (WaitResult == STATUS_TIMEOUT) {
+				// Continue waiting for cursor events
+				continue;
 			}
 		}
 		else {
@@ -1071,7 +1101,111 @@ void SwapChainProcessor::GetCursorData()
 		}
 	} // end of while(1)
 }
-#endif
+
+void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, INT* tempY)
+{
+	HRESULT status;
+	
+	SecureZeroMemory(&m0_outputargs, sizeof(struct IDARG_OUT_QUERY_HWCURSOR));
+	status = IddCxMonitorQueryHardwareCursor(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num], &m0_outputargs);
+	if (!NT_SUCCESS(status)) {
+		ERR("Failed IddCxMonitorQueryHardwareCursor\n");
+		//We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
+		return;
+	}
+	else { //Success
+		bool positionChanged = ((*tempX != m0_outputargs.X) || (*tempY != m0_outputargs.Y));
+		bool shapeChanged = (*tempshapeid != m0_outputargs.CursorShapeInfo.ShapeId);
+		SecureZeroMemory(m_cursordata, sizeof(struct CursorData));
+		if (positionChanged) {
+			*tempX = m0_outputargs.X;
+			*tempY = m0_outputargs.Y;
+			m_cursordata->screen_num = m_screen_num;
+			m_cursordata->iscursorvisible = m0_outputargs.IsCursorVisible;
+			m_cursordata->cursor_x = m0_outputargs.X;
+			m_cursordata->cursor_y = m0_outputargs.Y;
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_POS, \
+				m_cursordata, sizeof(struct CursorData), \
+				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
+				& m_ioctlresp_size, NULL)) {
+				ERR("IOCTL_DVSERVER_CURSOR_POS call failed!\n");
+			}
+		}
+		if (shapeChanged) {
+			*tempshapeid = m0_outputargs.CursorShapeInfo.ShapeId;
+			m_cursordata->screen_num = m_screen_num;
+			m_cursordata->width = m0_outputargs.CursorShapeInfo.Width;
+			m_cursordata->height = m0_outputargs.CursorShapeInfo.Height;
+			m_cursordata->pitch = m0_outputargs.CursorShapeInfo.Pitch;
+			m_cursordata->x_hot = m0_outputargs.CursorShapeInfo.XHot;
+			m_cursordata->y_hot = m0_outputargs.CursorShapeInfo.YHot;
+			m_cursordata->cursor_x = m0_outputargs.X;
+			m_cursordata->cursor_y = m0_outputargs.Y;
+			m_cursordata->iscursorvisible = m0_outputargs.IsCursorVisible;
+			m_cursordata->data = g_inputargs[m_screen_num].pShapeBuffer;
+			m_cursordata->color_format = DVSERVERUMD_COLORFORMAT;
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_DATA, \
+				m_cursordata, sizeof(struct CursorData), \
+				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
+				& m_ioctlresp_size, NULL)) {
+				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed!\n");
+			}
+		}
+	}
+}
+
+void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, INT* tempX, INT* tempY)
+{
+	HRESULT status;
+	
+	SecureZeroMemory(&m_outputargs, sizeof(struct IDARG_OUT_QUERY_HWCURSOR2));
+	status = IddCxMonitorQueryHardwareCursor2(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num], &m_outputargs);
+	if (!NT_SUCCESS(status)) {
+		ERR("Failed IddCxMonitorQueryHardwareCursor2\n");
+		//We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
+		return;
+	}
+	else {
+		bool positionChanged = (*tempposid != m_outputargs.PositionId) && (m_outputargs.PositionValid == TRUE) && ((*tempX != m_outputargs.X) || (*tempY != m_outputargs.Y));
+		bool shapeChanged = (*tempshapeid != m_outputargs.CursorShapeInfo.ShapeId);
+		SecureZeroMemory(m_cursordata, sizeof(struct CursorData));
+		if (positionChanged) {
+			*tempposid = m_outputargs.PositionId;
+			*tempX = m_outputargs.X;
+			*tempY = m_outputargs.Y;
+			m_cursordata->screen_num = m_screen_num;
+			m_cursordata->iscursorvisible = m_outputargs.IsCursorVisible;
+			m_cursordata->cursor_x = m_outputargs.X;
+			m_cursordata->cursor_y = m_outputargs.Y;
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_POS, \
+				m_cursordata, sizeof(struct CursorData), \
+				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
+				& m_ioctlresp_size, NULL)) {
+				ERR("IOCTL_DVSERVER_CURSOR_POS call failed!\n");
+			}
+		}
+		if (shapeChanged) {
+			*tempshapeid = m_outputargs.CursorShapeInfo.ShapeId;
+			m_cursordata->screen_num = m_screen_num;
+			m_cursordata->width = m_outputargs.CursorShapeInfo.Width;
+			m_cursordata->height = m_outputargs.CursorShapeInfo.Height;
+			m_cursordata->pitch = m_outputargs.CursorShapeInfo.Pitch;
+			m_cursordata->x_hot = m_outputargs.CursorShapeInfo.XHot;
+			m_cursordata->y_hot = m_outputargs.CursorShapeInfo.YHot;
+			m_cursordata->cursor_x = m_outputargs.X;
+			m_cursordata->cursor_y = m_outputargs.Y;
+			m_cursordata->iscursorvisible = m_outputargs.IsCursorVisible;
+			m_cursordata->data = g_inputargs[m_screen_num].pShapeBuffer;
+			m_cursordata->color_format = DVSERVERUMD_COLORFORMAT;
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_DATA, \
+				m_cursordata, sizeof(struct CursorData), \
+				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
+				& m_ioctlresp_size, NULL)) {
+				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed!\n");
+			}
+		}
+	}
+}
 
 #pragma endregion
 
@@ -1262,58 +1396,52 @@ IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, _In_ 
 IndirectMonitorContext::~IndirectMonitorContext()
 {
 	m_ProcessingThread.reset();
+	if (g_inputargs[m_MonitorIndex].pShapeBuffer != INVALID_HANDLE_VALUE) {		
+		free(g_inputargs[m_MonitorIndex].pShapeBuffer);
+	}
 
-#ifdef DVSERVER_HWDCURSOR
-	if (g_inputargs.pShapeBuffer != INVALID_HANDLE_VALUE)
-		free(g_inputargs.pShapeBuffer);
-
-	if (cursor_event != INVALID_HANDLE_VALUE)
-		CloseHandle(cursor_event);
-#endif //end of DVSERVER_HWDCURSOR 
+	if (m_cursor_event != INVALID_HANDLE_VALUE) {
+		CloseHandle(m_cursor_event);
+	}
 }
 
-#ifdef DVSERVER_HWDCURSOR
-void IndirectMonitorContext::SetupIDDCursor(IDDCX_PATH* pPath)
+void IndirectMonitorContext::SetupDVServerCursor()
 {
-	cursor_event = CreateEvent(NULL, false, false, NULL);
-	if (cursor_event == INVALID_HANDLE_VALUE) {
+	TRACING();
+	m_cursor_event = CreateEvent(NULL, false, false, NULL);
+	if (m_cursor_event == INVALID_HANDLE_VALUE) {
 		ERR("Cursor Event Create Failed\n");
 		return;
 	}
 
 	/* Configure HW cursor if path is active */
-	if ((pPath->Flags & IDDCX_PATH_FLAGS_ACTIVE)) {
-		IDARG_IN_SETUP_HWCURSOR SetupHwCursor = {};
-		SetupHwCursor.CursorInfo.Size = sizeof(SetupHwCursor.CursorInfo);
-		SetupHwCursor.CursorInfo.ColorXorCursorSupport = IDDCX_XOR_CURSOR_SUPPORT_NONE;
-		SetupHwCursor.CursorInfo.AlphaCursorSupport = true;
-		SetupHwCursor.CursorInfo.MaxX = CURSOR_MAX_WIDTH;
-		SetupHwCursor.CursorInfo.MaxY = CURSOR_MAX_HEIGHT;
+	IDARG_IN_SETUP_HWCURSOR SetupHwCursor = {};
+	SetupHwCursor.CursorInfo.Size = sizeof(SetupHwCursor.CursorInfo);
+	SetupHwCursor.CursorInfo.ColorXorCursorSupport = IDDCX_XOR_CURSOR_SUPPORT_NONE;
+	SetupHwCursor.CursorInfo.AlphaCursorSupport = true;
+	SetupHwCursor.CursorInfo.MaxX = CURSOR_MAX_WIDTH;
+	SetupHwCursor.CursorInfo.MaxY = CURSOR_MAX_HEIGHT;
 
-		//g_iddcursor_event.Attach(CreateEvent(nullptr, false, false, nullptr));
-		g_iddcursor_os_event.Attach(cursor_event);
-		SetupHwCursor.hNewCursorDataAvailable = g_iddcursor_os_event.Get();
-		NTSTATUS Status = IddCxMonitorSetupHardwareCursor(m_Monitor, &SetupHwCursor);
+	g_dvserver_cursor_os_event[m_MonitorIndex].Attach(m_cursor_event);
+	SetupHwCursor.hNewCursorDataAvailable = g_dvserver_cursor_os_event[m_MonitorIndex].Get();
+	NTSTATUS Status = IddCxMonitorSetupHardwareCursor(m_Monitor, &SetupHwCursor);
 
-		if (NT_SUCCESS(Status)) {
-			m_IddCxMonitorObject = m_Monitor;
-			g_inputargs.LastShapeId = INITIAL_CURSOR_SHAPE_ID;
-			g_inputargs.ShapeBufferSizeInBytes = CURSOR_BUFFER_SIZE;
-			g_inputargs.pShapeBuffer = (PBYTE)malloc(CURSOR_BUFFER_SIZE);
-			if (g_inputargs.pShapeBuffer == INVALID_HANDLE_VALUE) {
-				ERR("Failed allocating cursor buffer\n");
-				g_init_kmd_resources = FALSE;
-				return;
-			}
-			DBGPRINT("Hardware cursor setup success\n");
-		}
-		else {
-			ERR("Hardware cursor setup failed\n");
+	if (NT_SUCCESS(Status)) {
+		g_DvserverCxMonitorObject[m_MonitorIndex] = m_Monitor;
+		g_inputargs[m_MonitorIndex].LastShapeId = INITIAL_CURSOR_SHAPE_ID;
+		g_inputargs[m_MonitorIndex].ShapeBufferSizeInBytes = CURSOR_BUFFER_SIZE;
+		g_inputargs[m_MonitorIndex].pShapeBuffer = (PBYTE)malloc(CURSOR_BUFFER_SIZE);
+		if (g_inputargs[m_MonitorIndex].pShapeBuffer == INVALID_HANDLE_VALUE) {
+			ERR("Failed allocating cursor buffer\n");
 			g_init_kmd_resources = FALSE;
-		}
+			return;
+		}		
+	}
+	else {
+		ERR("Hardware cursor setup failed\n");
+		g_init_kmd_resources = FALSE;
 	}
 }
-#endif
 
 void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID RenderAdapter, HANDLE NewFrameEvent)
 {
@@ -1329,6 +1457,9 @@ void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID Ren
 	}
 	else
 	{
+		if (hwcursorsupported == TRUE) {
+			IndirectMonitorContext::SetupDVServerCursor();
+		}
 		// Create a new swap-chain processing thread
 		m_ProcessingThread.reset(new SwapChainProcessor(SwapChain, Device, NewFrameEvent, m_MonitorIndex));
 	}
@@ -1373,10 +1504,6 @@ NTSTATUS DVServerUMDAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_
 	// through pInArgs->pPaths and look for IDDCX_PATH_FLAGS_ACTIVE. Any path not active is inactive (e.g. the monitor
 	// should be turned off).
 	// ==============================
-#ifdef DVSERVER_HWDCURSOR
-	auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(pInArgs->pPaths->MonitorObject);
-	pMonitorContextWrapper->pContext->SetupIDDCursor(pInArgs->pPaths);
-#endif //end of DVSERVER_HWDCURSOR 
 
 	return STATUS_SUCCESS;
 }
@@ -1546,6 +1673,7 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	DWORD waitstatus;
 	bool do_set_event = FALSE;
 	bool d_edid = TRUE;
+	bool isWin11 = FALSE;
 	int status;
 	int count;
 	disp_info dinfo = { 0 };
@@ -1645,8 +1773,11 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		return DVSERVERUMD_FAILURE;
 	}
 
-	if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[PRIMARY_IDD_INDEX], PRIMARY_IDD_INDEX, d_edid) == DVSERVERUMD_FAILURE) {
-		ERR("QEMU EDID initialization failed to get the default Monitor EDID");
+	isWin11 = IsWindows11OrLater();
+	DBGPRINT("OS Version is %s, using %s EDID", isWin11 ? "WIN11" : "WIN10", isWin11 ? "realtime" : "default");
+
+	if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[PRIMARY_IDD_INDEX], PRIMARY_IDD_INDEX, isWin11 ? FALSE : d_edid) == DVSERVERUMD_FAILURE) {
+		ERR("QEMU EDID initialization failed to get the corresponding EDID");
 	}
 
 	pDeviceContextWrapper->pContext->FinishInit(PRIMARY_IDD_INDEX);
@@ -1821,6 +1952,39 @@ int get_hpd_data(HANDLE devHandle, hp_info* data)
 
 	free(g_hdata);
 	return DVSERVERUMD_SUCCESS;
+}
+
+bool IsWindows11OrLater()
+{
+	OSVERSIONINFOEX osvi = { sizeof(OSVERSIONINFOEX) };
+	DWORDLONG conditionMask = 0;
+	BOOL result = FALSE;
+	DWORD error = 0;
+
+	osvi.dwMajorVersion = WINDOWS11_MAJOR_VERSION;
+	osvi.dwBuildNumber = WINDOWS11_BUILD_NUMBER;
+
+	VER_SET_CONDITION(conditionMask, VER_MAJORVERSION, VER_GREATER_EQUAL);
+	VER_SET_CONDITION(conditionMask, VER_BUILDNUMBER, VER_GREATER_EQUAL);
+
+	result = VerifyVersionInfo(&osvi, VER_MAJORVERSION | VER_BUILDNUMBER, conditionMask);
+	if (!result)
+	{
+		error = GetLastError();
+		if (error == ERROR_OLD_WIN_VERSION)
+		{
+			DBGPRINT("OS version is older than Windows 11");
+			return false;
+		}
+		else
+		{
+			// Unexpected error occurred
+			ERR("VerifyVersionInfo failed with error: %d",error);
+			return false;
+		}
+	}
+	DBGPRINT("OS version is later than Windows 11");
+	return true;
 }
 
 #pragma endregion
