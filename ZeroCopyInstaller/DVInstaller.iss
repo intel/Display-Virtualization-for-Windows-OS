@@ -49,7 +49,6 @@ Source: "{#DvServerKMD}\DVServerKMD.inf"; DestDir: "{tmp}"; Flags: deleteafterin
 Source: "{#DvServerKMD}\DVServerKMD.sys"; DestDir: "{tmp}"; Flags: deleteafterinstall
 Source: "{#DvInstaller}\DVInstaller.exe"; DestDir: "{app}\DV"; Flags: uninsneveruninstall
 Source: "{#DvInstaller}\DVInstaller.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
-Source: "{#DvInstallerlib}\DVInstallerLib.dll"; DestDir: "{tmp}"; Flags: dontcopy 
 
 [Run]
 
@@ -126,10 +125,6 @@ var
     Result :=True
  end;
  
-
-function GetStringfromRegister(var major,minor,patch,build: Integer): Integer;
-external 'GetStringfromRegister@files:DVInstallerLib.dll cdecl';
-
 function UninstallNeedRestart(): Boolean;
 begin
   Result := True;
@@ -142,11 +137,56 @@ var
   major,minor,patch,build: Integer;
   VersionString: String;
   InstalledDriverVersion: String;
+  subkeynames: TArrayOfString;
+  checkregkeypath, findkmdregkeyname, kmdregkeyvalue, kmddriverversion: String;
+  kmdregkeyrootpath : array[1..2] of String;
+  i, j: Integer;
   
 begin
+  kmdregkeyrootpath[1] := 'SYSTEM\CurrentControlSet\Control\Class\{4d36e97d-e325-11ce-bfc1-08002be10318}';
+  kmdregkeyrootpath[2] := 'SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}';
+  findkmdregkeyname := 'DriverDesc';
+  i := 0;
+  j := 0;
   InstalledVersion :=0;
-  InstalledVersion := GetStringfromRegister(major,minor,patch,build);
-  VersionString := Format('%d.%d.%d.%d ',[major,minor,patch,build]);
+  
+  // Get the device registry details info for DVServerKMD  
+  for j := 1 to GetArrayLength(kmdregkeyrootpath) do begin
+    if (InstalledVersion = 0) then begin
+      if (RegGetSubkeyNames(HKEY_LOCAL_MACHINE, kmdregkeyrootpath[j], subkeynames)) then begin
+          for i := 0 to GetArrayLength(subkeynames)-1 do begin    
+              checkregkeypath := '';
+              checkregkeypath := kmdregkeyrootpath[j] + '\' + subkeynames[i];
+              Log(checkregkeypath);          
+              
+              // retrieve Driver key matching with "DVServerKMD Device"
+              RegQueryStringValue(HKEY_LOCAL_MACHINE, checkregkeypath, findkmdregkeyname, kmdregkeyvalue)
+              if (kmdregkeyvalue = 'DVServerKMD Device') then begin
+                  
+                  if (RegQueryStringValue(HKEY_LOCAL_MACHINE, checkregkeypath, 'DriverVersion', VersionString)) then begin
+                    Log(VersionString);
+                    Log('RegKey Found!!!!! Exiting loop!!!!');
+                    VersionString := VersionString + ' ';
+                    InstalledVersion := 1;
+                    break;
+                  end
+                  else begin
+                    Log('KMD DriverVersion NOT Found! Exiting!!!');
+                    InstalledVersion := 0;
+                  end;
+              end
+              else begin
+              InstalledVersion := 0;
+              end; 
+          end;//end of loop
+      end
+      else begin
+        Log('DVServerKMD Registry NOT Found!');
+          InstalledVersion := 0;
+      end;
+    end;
+  end; // end of main loop
+  
   Installoption := 1;
   if InstalledVersion = 1 then
   begin

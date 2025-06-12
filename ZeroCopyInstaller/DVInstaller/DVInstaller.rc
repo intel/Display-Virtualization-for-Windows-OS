@@ -19,7 +19,7 @@ BEGIN
         BEGIN
             VALUE "FileVersion", "${FileVersion}"
  	    VALUE "ProductVersion", "${ProductVersionString}"
-            VALUE "ProductName", "DVInstaller.dll"     
+            VALUE "ProductName", "DVInstaller.exe"
 	    VALUE "LegalCopyright", "Copyright (C) 2021 Intel Corporation"
             VALUE "FileDescription", "Display Virtualization Installer " 
         END

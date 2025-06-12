@@ -68,6 +68,16 @@ static NTSTATUS IoctlRequestHPEventInfo(
 	const WDFREQUEST      Request,
 	size_t* BytesReturned);
 
+static NTSTATUS IoctlSetPointerShape(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const WDFREQUEST      Request);
+
+static NTSTATUS IoctlSetPointerPosition(
+	const PDEVICE_CONTEXT DeviceContext,
+	const size_t          InputBufferLength,
+	const WDFREQUEST      Request);
+
 //
 // Events from the IoQueue object
 //

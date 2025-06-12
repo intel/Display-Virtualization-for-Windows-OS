@@ -9,6 +9,7 @@ typedef struct _BLT_INFO {
 	D3DKMDT_VIDPN_PRESENT_PATH_ROTATION Rotation;
 	UINT Width;
 	UINT Height;
+	D3DDDIFORMAT PixelFmt;
 } BLT_INFO;
 
 

@@ -32,6 +32,7 @@ DEFINE_GUID(GUID_DEVINTERFACE_DVServerKMD,
 #define IOCTL_DVSERVER_TEST_IMAGE			CTL_CODE(FILE_DEVICE_UNKNOWN, 0x812, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DVSERVER_GET_TOTAL_SCREENS	CTL_CODE(FILE_DEVICE_UNKNOWN, 0x813, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DVSERVER_HP_EVENT				CTL_CODE(FILE_DEVICE_UNKNOWN, 0x814, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_DVSERVER_CURSOR_POS			CTL_CODE(FILE_DEVICE_UNKNOWN, 0x815, METHOD_BUFFERED, FILE_ANY_ACCESS)
 
 typedef struct FrameMetaData
 {
@@ -49,15 +50,19 @@ typedef struct FrameMetaData
 
 typedef struct CursorData
 {
+	UINT32	screen_num;
 	INT		cursor_x;
 	INT		cursor_y;
-	UINT16	iscursorvisible;
+	bool	iscursorvisible;
 	UINT32	cursor_version;
 	UINT16	cursor_type;
 	UINT32  width;
 	UINT32  height;
 	UINT32  pitch;
-	void* data;
+	UINT32 color_format;
+	void*	data;
+	UINT32	x_hot;
+	UINT32	y_hot;
 }CursorData;
 
 struct mode_info

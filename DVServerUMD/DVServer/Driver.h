@@ -22,13 +22,14 @@
 DEFINE_GUID(GUID_DEVINTERFACE_DVSERVERKMD,
 	0x1c514918, 0xa855, 0x460a, 0x97, 0xda, 0xed, 0x69, 0x1d, 0xd5, 0x63, 0xcf);
 
-//#define DVSERVER_HWDCURSOR
-
 #define DVSERVERUMD_COLORFORMAT			21 // D3DDDIFMT_A8R8G8B8
 #define DVSERVER_BBP					4  // 4 Bytes per pixel
 #define DEVINFO_FLAGS					DIGCF_PRESENT | DIGCF_ALLCLASSES | DIGCF_DEVICEINTERFACE
 #define REPORT_FRAME_STATS				60 // we need to report frame stats to OS for every 60 frames
 #define PRINT_FREQ                      3600
+
+#define WINDOWS11_MAJOR_VERSION			10
+#define WINDOWS11_BUILD_NUMBER			22000 // Windows 11 starts from Build 22000
 
 typedef enum FrameType
 {
@@ -40,22 +41,6 @@ typedef enum FrameType
 	FRAME_TYPE_MAX, // sentinel value
 }
 FrameType;
-
-#ifdef DVSERVER_HWDCURSOR
-typedef struct CursorData
-{
-	INT	cursor_x;
-	INT	cursor_y;
-	UINT16	iscursorvisible;
-	UINT32	cursor_version;
-	UINT16	cursor_type;
-	UINT32  width;
-	UINT32  height;
-	UINT32  pitch;
-	void* data;
-}CursorData;
-#endif //end of DVSERVER_HWDCURSOR
-
 
 namespace Microsoft
 {
@@ -139,13 +124,15 @@ namespace Microsoft
 			IDDCX_SWAPCHAIN m_hSwapChain;
 			std::shared_ptr<Direct3DDevice> m_Device;
 			HANDLE m_hAvailableBufferEvent;
-			Microsoft::WRL::Wrappers::Thread m_hThread;
-			Microsoft::WRL::Wrappers::Event m_hTerminateEvent;
+			Microsoft::WRL::Wrappers::Thread m_hThread, m_hCursorThread;
+			Microsoft::WRL::Wrappers::Event m_hTerminateEvent, m_hTerminateCursorEvent;
 			int m_screen_num, print_counter;
 
 			//FrameMetaData related 
 			ID3D11Texture2D* m_destimage;
 			ID3D11Texture2D* m_IAcquiredDesktopImage;
+			ID3D11Texture2D* m_IAcquiredDesktopBackupImage;
+			Microsoft::WRL::ComPtr<IDXGIResource> AcquiredBackupBuffer;
 			D3D11_MAPPED_SUBRESOURCE m_staging_buffer;
 			D3D11_TEXTURE2D_DESC m_input_desc, m_staging_desc;
 			uint32_t m_width, m_height, m_pitch, m_stride;
@@ -159,17 +146,17 @@ namespace Microsoft
 			struct FrameMetaData* m_framedata;
 			struct KMDF_IOCTL_Response* m_ioctlresp_frame;
 
-#ifdef DVSERVER_HWDCURSOR
 			//Cursor related
 			struct CursorData* m_cursordata;
 			struct KMDF_IOCTL_Response* m_ioctlresp_cursor;
-			IDARG_OUT_QUERY_HWCURSOR m_outputargs;
-			HANDLE cursorthread_handle;
+			IDARG_OUT_QUERY_HWCURSOR2 m_outputargs;
+			IDARG_OUT_QUERY_HWCURSOR m0_outputargs;
+			HANDLE m_cursorthread_handle;
 
 			void GetCursorData();
+			void ProcessCursorDataLegacy(UINT *tempshapeid, INT *tempX, INT *tempY);
+			void ProcessCursorData(UINT *tempshapeid, UINT *tempposid, INT *tempX, INT *tempY);
 			static DWORD CALLBACK CursorThread(LPVOID Argument);
-
-#endif //end of DVSERVER_HWDCURSOR
 		};
 
 		/// <summary>
@@ -199,19 +186,19 @@ namespace Microsoft
 			void AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID RenderAdapter, HANDLE NewFrameEvent);
 			void UnassignSwapChain();
 
-#ifdef DVSERVER_HWDCURSOR
-			void SetupIDDCursor(IDDCX_PATH* pPath);
-#endif //end of DVSERVER_HWDCURSOR
+			void SetupDVServerCursor();
 
 		private:
 			IDDCX_MONITOR m_Monitor;
 			UINT m_MonitorIndex;
 			std::unique_ptr<SwapChainProcessor> m_ProcessingThread;
+			HANDLE m_cursor_event;
 		};
 	}
 }
 int hpd_event_create(IDDCX_ADAPTER AdapterObject);
 int get_hpd_data(HANDLE devHandle, struct hp_info* data);
+bool IsWindows11OrLater();
 struct disp_info {
 	int disp_count;
 	HANDLE mutex;
