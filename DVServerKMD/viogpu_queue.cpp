@@ -504,6 +504,7 @@ void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, U
 	RtlZeroMemory(cmd, sizeof(*cmd));
 
 	cmd->hdr.type = VIRTIO_GPU_CMD_RESOURCE_FLUSH;
+	cmd->hdr.flags |= VIRTIO_GPU_FLAG_FENCE;
 	cmd->hdr.fence_id = screen_num;
 	cmd->resource_id = res_id;
 	cmd->r.width = width;
