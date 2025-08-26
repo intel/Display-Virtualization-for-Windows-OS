@@ -189,10 +189,18 @@
     <ClCompile Include="Tracing.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <Text Include="DVEnabler_Version.txt" />
+  </ItemGroup>
+  <ItemGroup>
     <ResourceCompile Include="DVEnabler.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-  <Import Project="UpdateVersion.targets" />
+  <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
+    <Exec 
+    Command="&quot;$(SolutionDir)generate_version_header.bat&quot; &quot;$(ProjectDir)DVEnabler_Version.txt&quot; &quot;$(ProjectDir)&quot;" 
+    WorkingDirectory="$(ProjectDir)" 
+    />
+  </Target>
 </Project>

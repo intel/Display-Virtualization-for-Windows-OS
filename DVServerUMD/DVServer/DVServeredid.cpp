@@ -39,7 +39,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 {
 	TRACING();
 	IndirectSampleMonitor* monitor = (IndirectSampleMonitor*)m;
-	unsigned int i = 0, edid_mode_index = 0, modeSize;
+	unsigned int i = 0, edid_mode_index = 0;
 
 	if (!devHandle || !m) {
 		ERR("Invalid parameter\n");
@@ -91,7 +91,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 	SecureZeroMemory(edata, sizeof(struct edid_info));
 	edata->screen_num = id;
 
-	DBGPRINT("Requesting Mode List size through EDID IOCTL for screen = %d\n", edata->screen_num);
+	DBGPRINT("Requesting EDID info through EDID IOCTL for screen = %d\n", edata->screen_num);
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_EDID_DATA, edata, sizeof(struct edid_info), edata, sizeof(struct edid_info), &bytesReturned, NULL)) {
 		ERR("IOCTL_DVSERVER_GET_EDID_DATA call failed\n");
 		free(edata);
@@ -103,35 +103,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 		return DVSERVERUMD_FAILURE;
 	}
 
-	/*Resetting the edata buffer for coverity*/
-	modeSize = edata->mode_size;
-	SecureZeroMemory(edata, sizeof(struct edid_info));
-	edata->screen_num = id;
-	edata->mode_size = modeSize;
-
-	edata->mode_list = (struct mode_info*)malloc(sizeof(struct mode_info) * edata->mode_size);
-	if (edata->mode_list == NULL) {
-		ERR("Failed to allocate mode list structure\n");
-		free(edata);
-		return DVSERVERUMD_FAILURE;
-	}
-	SecureZeroMemory(edata->mode_list, sizeof(struct mode_info) * edata->mode_size);
-
-	DBGPRINT("Requesting EDID Data through EDID IOCTL for screen = %d\n", edata->screen_num);
-	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_EDID_DATA, edata, sizeof(struct edid_info), edata, sizeof(struct edid_info), &bytesReturned, NULL)) {
-		ERR("IOCTL_DVSERVER_GET_EDID_DATA call failed!\n");
-		free(edata->mode_list);
-		free(edata);
-		return DVSERVERUMD_FAILURE;
-	}
-	/*Rechecking for possible out of range */
-	if (edata->mode_size > MODE_LIST_MAX_SIZE) {
-		ERR("mode list is corrupted \n");
-		free(edata->mode_list);
-		free(edata);
-		return DVSERVERUMD_FAILURE;
-	}
-
+	
 	memcpy_s(monitor->pEdidBlock, monitor->szEdidBlock, edata->edid_data, monitor->szEdidBlock);
 	monitor->ulPreferredModeIdx = 0;
 
@@ -154,7 +126,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 			edid_mode_index++;
 		}
 	}
-	free(edata->mode_list);
+	
 	free(edata);
 	return DVSERVERUMD_SUCCESS;
 }

@@ -25,6 +25,7 @@ DEFINE_GUID(GUID_DEVINTERFACE_DVServerKMD,
 // {1c514918-a855-460a-97da-ed691dd563cf}
 
 #define MAX_SCAN_OUT               4
+#define MODE_LIST_MAX_SIZE         32
 #define IOCTL_DVSERVER_FRAME_DATA			CTL_CODE(FILE_DEVICE_UNKNOWN, 0x807, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DVSERVER_CURSOR_DATA			CTL_CODE(FILE_DEVICE_UNKNOWN, 0x808, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_DVSERVER_GET_EDID_DATA		CTL_CODE(FILE_DEVICE_UNKNOWN, 0x809, METHOD_BUFFERED, FILE_ANY_ACCESS)
@@ -77,7 +78,7 @@ struct edid_info
 	unsigned char edid_data[256];
 	unsigned int mode_size;
 	unsigned int screen_num;
-	mode_info* mode_list;
+	struct mode_info mode_list[MODE_LIST_MAX_SIZE];
 };
 
 struct screen_info
