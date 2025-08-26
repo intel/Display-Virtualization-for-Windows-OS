@@ -166,11 +166,14 @@
   <ItemGroup>
     <ResourceCompile Include="DVInstaller.rc" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="UpdateVersion.targets" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-  <Import Project="UpdateVersion.targets" />
+  <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
+   <Exec 
+    Command="&quot;$(SolutionDir)..\generate_version_header.bat&quot; &quot;$(ProjectDir)DVInstaller_Version.txt&quot; &quot;$(ProjectDir)&quot;" 
+    WorkingDirectory="$(ProjectDir)" 
+   />
+  </Target>
+
 </Project>

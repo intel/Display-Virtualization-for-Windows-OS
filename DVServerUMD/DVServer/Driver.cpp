@@ -1389,7 +1389,7 @@ DWORD CALLBACK IndirectDeviceContext::HPDThread(LPVOID Argument)
 }
 
 IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, _In_ UINT ConnectorIndex) :
-	m_Monitor(Monitor), m_MonitorIndex(ConnectorIndex)
+	m_Monitor(Monitor), m_MonitorIndex(ConnectorIndex), m_cursor_event(nullptr)
 {
 }
 

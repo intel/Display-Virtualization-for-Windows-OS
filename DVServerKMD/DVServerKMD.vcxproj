@@ -12,7 +12,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="ReadMe.txt" />
-    <None Include="UpdateVersion.targets" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="baseobj.cpp" />
@@ -152,5 +151,10 @@ certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
-  <Import Project="UpdateVersion.targets" />
+  <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
+   <Exec 
+    Command="&quot;$(SolutionDir)generate_version_header.bat&quot; &quot;$(ProjectDir)DVServerKMD_Version.txt&quot; &quot;$(ProjectDir)&quot;" 
+    WorkingDirectory="$(ProjectDir)" 
+   />
+ </Target>
 </Project>
