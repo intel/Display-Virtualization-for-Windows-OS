@@ -151,63 +151,26 @@ Return Value:
 		// https://docs.microsoft.com/en-us/windows-hardware/drivers/ddi/wdfrequest/nf-wdfrequest-wdfrequestretrieveinputbuffer
 		status = IoctlRequestPresentFb(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
 		if (status != STATUS_SUCCESS) {
-			ERR("IoctlRequestPresentFb failed with status = %d\n", status);
 			return;
 		}
-
-		if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
-			ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
-			return;
-		}
-
-		status = WdfRequestRetrieveOutputBuffer(Request, sizeof(struct KMDF_IOCTL_Response), (PVOID*)&resp, &bufSize);
-		if (!NT_SUCCESS(status)) {
-			ERR("Couldn't retrieve Output buffer\n");
-			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-			return;
-		}
-
-		//Return value from the KMDF DVServer
-		resp->retval = DVSERVERKMD_SUCCESS;
-		WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 		break;
 
 
 	case IOCTL_DVSERVER_CURSOR_DATA:
 
-		status = IoctlSetPointerShape(pDeviceContext, InputBufferLength, Request);
-		if (status != STATUS_SUCCESS) {
-			ERR("IoctlSetPointerShape failed with status = %d\n", status);
+		status = IoctlSetPointerShape(pDeviceContext, InputBufferLength, OutputBufferLength, Request);
+		if (status != STATUS_SUCCESS)
 			return;
-		}
-
-		if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
-			ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
-			return;
-		}
-
-		status = WdfRequestRetrieveOutputBuffer(Request, sizeof(struct KMDF_IOCTL_Response), (PVOID*)&resp, &bufSize);
-		if (!NT_SUCCESS(status)) {
-			ERR("Couldn't retrieve Output buffer\n");
-			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-			return;
-		}
-
-		//Return value from the KMDF DVServer
-		resp->retval = DVSERVERKMD_SUCCESS;
-		WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 		break;
 
 	case IOCTL_DVSERVER_CURSOR_POS:
 		status = IoctlSetPointerPosition(pDeviceContext, InputBufferLength, Request);
-		if (status != STATUS_SUCCESS) {
-			ERR("IoctlSetPointerPosition failed with status = %d\n", status);
-			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		if (status != STATUS_SUCCESS)
 			return;
-		}
 
 		if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
 			ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
+			WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 			return;
 		}
 
@@ -236,6 +199,7 @@ Return Value:
 
 		if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
 			ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
+			WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 			return;
 		}
 
@@ -255,22 +219,6 @@ Return Value:
 		status = IoctlRequestPresentFb(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
 		if (status != STATUS_SUCCESS)
 			return;
-
-		if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
-			ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
-			return;
-		}
-
-		status = WdfRequestRetrieveOutputBuffer(Request, sizeof(struct KMDF_IOCTL_Response), (PVOID*)&resp, &bufSize);
-		if (!NT_SUCCESS(status)) {
-			ERR("Couldn't retrieve Output buffer\n");
-			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-			return;
-		}
-
-		//Return value from the KMDF DVServer
-		resp->retval = DVSERVERKMD_SUCCESS;
-		WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 		break;
 	case IOCTL_DVSERVER_GET_TOTAL_SCREENS:
 		status = IoctlRequestTotalScreens(pDeviceContext, InputBufferLength, OutputBufferLength, Request, &bytesReturned);
@@ -381,26 +329,28 @@ static NTSTATUS IoctlRequestSetMode(
 
 	if (!pAdapter) {
 		ERR("Coudlnt' find adapter\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	if (InputBufferLength < sizeof(struct FrameMetaData)) {
 		ERR("Input Buffer is too small: provided = %Iu, expected >= %Iu\n", InputBufferLength, sizeof(struct FrameMetaData));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
 	status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, (PVOID*)&ptr, NULL);
 	if (!NT_SUCCESS(status)) {
 		ERR("Couldn't retrieve Input buffer\n");
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		WdfRequestComplete(Request, STATUS_INVALID_USER_BUFFER);
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
 	if (ptr->screen_num >= MAX_SCAN_OUT) {
 		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
 			ptr->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
 	}
 
 	CURRENT_MODE tempCurrentMode = { 0 };
@@ -415,6 +365,7 @@ static NTSTATUS IoctlRequestSetMode(
 	status = pAdapter->SetCurrentModeExt(&tempCurrentMode);
 	if (status != STATUS_SUCCESS) {
 		ERR("SetCurrentModeExt failed with status = %d\n", status);
+		WdfRequestComplete(Request, STATUS_UNSUCCESSFUL);
 		return STATUS_UNSUCCESSFUL;
 	}
 
@@ -443,39 +394,100 @@ static NTSTATUS IoctlRequestPresentFb(
 	const WDFREQUEST      Request,
 	size_t* BytesReturned)
 {
-	UNREFERENCED_PARAMETER(OutputBufferLength);
 	UNREFERENCED_PARAMETER(BytesReturned);
 	TRACING();
 
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
-	struct FrameMetaData* ptr = NULL;
+	FrameMetaData* ptr = NULL;
+	KMDF_IOCTL_Response* output = NULL;
+
+	PIRP irp = WdfRequestWdmGetIrp(Request);
+	if (!irp) {
+		ERR("Couldn't retrieve IRP\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(irp);
+	if (!irpSp) {
+		ERR("Couldn't retrieve IRP stack\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	PVOID inputBuffer = irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
+	PVOID outBuffer = irp->UserBuffer;
 
 	VioGpuAdapterLite* pAdapter =
 		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
 
 	if (!pAdapter) {
 		ERR("Couldnt' find adapter\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	if (InputBufferLength < sizeof(struct FrameMetaData)) {
 		ERR("Input Buffer is too small: provided = %Iu, expected >= %Iu\n", InputBufferLength, sizeof(struct FrameMetaData));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
-	status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, (PVOID*)&ptr, NULL);
-	if (!NT_SUCCESS(status)) {
-		ERR("Couldn't retrieve Input buffer\n");
+	if (inputBuffer == NULL) {
+		ERR("Input buffer is NULL\n");
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return STATUS_INVALID_USER_BUFFER;
+		return STATUS_INSUFFICIENT_RESOURCES;
+	}
+
+	ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
+
+	if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+		ERR("Cannot access user-mode buffer at IRQL > PASSIVE_LEVEL\n");
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
+		return STATUS_INVALID_DEVICE_REQUEST;
+	}
+
+	__try {
+		ProbeForRead(inputBuffer, sizeof(FrameMetaData), __alignof(FrameMetaData));
+		ptr = (FrameMetaData*)inputBuffer;
+		if (ptr == NULL) {
+			ERR("Input buffer is NULL\n");
+			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+			return STATUS_INSUFFICIENT_RESOURCES;
+		}
+
+		SIZE_T size = 0;
+
+		if (ptr->width != 0 && ptr->height <= (MAXSIZE_T / (ptr->stride))) {
+			size = (SIZE_T)ptr->height * (SIZE_T)ptr->stride;
+		}
+		else {
+			ERR("Invalid frame metadata: height=%u, width=%u, stride=%u\n", ptr->height, ptr->width, ptr->stride);
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
+
+		ProbeForRead(ptr->addr, size, sizeof(BYTE));
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		ERR("Invalid user-mode buffer access\n");
+		status = GetExceptionCode();
+		WdfRequestComplete(Request, status);
+		return status;
 	}
 
 	if (ptr->screen_num >= MAX_SCAN_OUT) {
 		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
 			ptr->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
 	}
+
+	if ((ptr->width > MAX_WIDTH_SIZE) || (ptr->height > MAX_HEIGHT_SIZE)) {
+		ERR("Invalid frame dimensions: width=%d, height=%d. Max allowed size is %dx%d.\n", ptr->width, ptr->height, MAX_WIDTH_SIZE, MAX_HEIGHT_SIZE);
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
 	status = pAdapter->ExecutePresentDisplayZeroCopy(
 		(BYTE*)ptr->addr,
 		ptr->bitrate,
@@ -487,9 +499,39 @@ static NTSTATUS IoctlRequestPresentFb(
 
 	if (status != STATUS_SUCCESS) {
 		ERR("ExecutePresentDisplayZeroCopy failed with status = %d\n", status);
+		WdfRequestComplete(Request, STATUS_UNSUCCESSFUL);
 		return STATUS_UNSUCCESSFUL;
 	}
 
+	if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
+		ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+
+	if (outBuffer == NULL) {
+		ERR("Output buffer is NULL\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	__try {
+		ProbeForWrite(outBuffer, sizeof(KMDF_IOCTL_Response), __alignof(KMDF_IOCTL_Response));
+		output = (KMDF_IOCTL_Response*)outBuffer;
+		if (output == NULL) {
+			ERR("Output buffer is NULL\n");
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		status = GetExceptionCode();
+		ERR("Exception while writing to output buffer: 0x%X\n", status);
+		WdfRequestComplete(Request, status);
+		return status;
+	}
+	output->retval = DVSERVERKMD_SUCCESS;
+	WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 	return STATUS_SUCCESS;
 }
 
@@ -510,35 +552,39 @@ static NTSTATUS IoctlRequestEdid(
 
 	if (DeviceContext == NULL) {
 		ERR("Invalid Device Context\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	} else {
 		pAdapter = (VioGpuAdapterLite*)DeviceContext->pvDeviceExtension;
 		if (!pAdapter) {
 			ERR("Coudlnt' find adapter\n");
-			return status;
+			WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+			return STATUS_INSUFFICIENT_RESOURCES;
 		}
 	}
 	if (InputBufferLength < sizeof(struct edid_info)) {
 		ERR("Input Buffer is too small: provided = %Iu, expected >= %Iu\n", InputBufferLength, sizeof(struct edid_info));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
 	status = WdfRequestRetrieveInputBuffer(Request, sizeof(struct edid_info), (PVOID*)&edata, &bufSize);
 	if (!NT_SUCCESS(status)) {
 		ERR("Couldn't retrieve Input buffer\n");
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		WdfRequestComplete(Request, STATUS_INVALID_USER_BUFFER);
+		return STATUS_INVALID_USER_BUFFER;
 	}
 
 	if (edata->screen_num >= MAX_SCAN_OUT) {
 		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
 			edata->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
 	}
 
 	if (OutputBufferLength < sizeof(struct edid_info)) {
 		ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct edid_info));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
@@ -546,7 +592,7 @@ static NTSTATUS IoctlRequestEdid(
 	if (!NT_SUCCESS(status)) {
 		ERR("Couldn't retrieve Output buffer\n");
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 	//Return value from the KMDF DVServer
 	if (pAdapter->GetModeListSize(edata->screen_num) != 0) {
@@ -581,18 +627,20 @@ static NTSTATUS IoctlRequestTotalScreens(
 
 	if (!pAdapter) {
 		ERR("Couldn't find adapter\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
 		ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
 	status = WdfRequestRetrieveOutputBuffer(Request, sizeof(struct KMDF_IOCTL_Response), (PVOID*)&mdata, &bufSize);
 	if (!NT_SUCCESS(status)) {
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	mdata->total_screens = pAdapter->GetNumScreens();
@@ -619,14 +667,15 @@ static NTSTATUS IoctlRequestHPEventInfo(
 
 	if (InputBufferLength < sizeof(struct hp_info)) {
 		ERR("Input Buffer is too small: provided = %Iu, expected >= %Iu\n", InputBufferLength, sizeof(struct hp_info));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
 	status = WdfRequestRetrieveInputBuffer(Request, sizeof(struct hp_info), (PVOID*)&info, &bufSize);
 	if (!NT_SUCCESS(status)) {
 		ERR("Couldn't retrieve Input buffer\n");
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		WdfRequestComplete(Request, STATUS_INVALID_USER_BUFFER);
+		return STATUS_INVALID_USER_BUFFER;
 	}
 
 	VioGpuAdapterLite* pAdapter =
@@ -634,18 +683,21 @@ static NTSTATUS IoctlRequestHPEventInfo(
 
 	if (!pAdapter) {
 		ERR("Couldn't find adapter\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	if (OutputBufferLength < sizeof(struct hp_info)) {
 		ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct hp_info));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
 	status = WdfRequestRetrieveOutputBuffer(Request, sizeof(struct hp_info), (PVOID*)&info, &bufSize);
 	if (!NT_SUCCESS(status)) {
+		ERR("Couldn't retrieve Output buffer\n");
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return status;
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 	pAdapter->SetEvent(info->event);
 	pAdapter->FillPresentStatus(info);
@@ -657,43 +709,100 @@ static NTSTATUS IoctlRequestHPEventInfo(
 static NTSTATUS IoctlSetPointerShape(
 	const PDEVICE_CONTEXT DeviceContext,
 	const size_t          InputBufferLength,
+	const size_t          OutputBufferLength,
 	const WDFREQUEST      Request)
 {
+	TRACING();
 	POINTER_SHAPE pointerShape;
 	struct CursorData* cptr = NULL;
-	size_t bufSize;
 	NTSTATUS status = STATUS_UNSUCCESSFUL;
+	KMDF_IOCTL_Response* output = NULL;
 
-	TRACING();
+
+	PIRP irp = WdfRequestWdmGetIrp(Request);
+	if (!irp) {
+		ERR("Couldn't retrieve IRP\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+	PIO_STACK_LOCATION irpSp = IoGetCurrentIrpStackLocation(irp);
+	if (!irpSp) {
+		ERR("Couldn't retrieve IRP stack\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	PVOID inputBuffer = irpSp->Parameters.DeviceIoControl.Type3InputBuffer;
+	PVOID outBuffer = irp->UserBuffer;
 
 	VioGpuAdapterLite* pAdapter =
-		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : nullptr);
+		(VioGpuAdapterLite*)(DeviceContext ? DeviceContext->pvDeviceExtension : 0);
 
 	if (!pAdapter) {
 		ERR("Couldnt' find adapter\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	if (InputBufferLength < sizeof(struct CursorData)) {
 		ERR("Input Buffer is too small: provided = %Iu, expected >= %Iu\n", InputBufferLength, sizeof(struct CursorData));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
-	status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, (PVOID*)&cptr, &bufSize);
-	if (!NT_SUCCESS(status)) {
-		ERR("Couldn't retrieve Input buffer\n");
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return STATUS_INVALID_USER_BUFFER;
+	if (inputBuffer == NULL) {
+		ERR("Input buffer is NULL\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
 	}
 
-	if (cptr == NULL) {
-		return STATUS_UNSUCCESSFUL;
+	ASSERT(KeGetCurrentIrql() == PASSIVE_LEVEL);
+
+	if (KeGetCurrentIrql() != PASSIVE_LEVEL) {
+		ERR("Cannot access user-mode buffer at IRQL > PASSIVE_LEVEL\n");
+		WdfRequestComplete(Request, STATUS_INVALID_DEVICE_REQUEST);
+		return STATUS_INVALID_DEVICE_REQUEST;
+	}
+
+	__try {
+		ProbeForRead(inputBuffer, sizeof(CursorData), __alignof(CursorData));
+		cptr = (CursorData*)inputBuffer;
+		if (cptr == NULL) {
+			ERR("Input buffer is NULL\n");
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
+		SIZE_T size = 0;
+		const SIZE_T bpp = 4; // bytes per pixel
+
+		if (cptr->width != 0 && cptr->height <= (MAXSIZE_T / (cptr->width * bpp))) {
+			size = (SIZE_T)cptr->height * (SIZE_T)cptr->width * bpp;
+		}
+		else {
+			ERR("Invalid cursor metadata: height=%u, width=%u\n", cptr->height, cptr->width);
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
+		ProbeForRead(cptr->data, size, sizeof(BYTE));
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		ERR("Invalid user-mode buffer access\n");
+		status = GetExceptionCode();
+		WdfRequestComplete(Request, status);
+		return status;
 	}
 
 	if (cptr->screen_num >= MAX_SCAN_OUT) {
 		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
 			cptr->screen_num, MAX_SCAN_OUT);
-		return STATUS_UNSUCCESSFUL;
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	if ((cptr->width > POINTER_SIZE) || (cptr->height > POINTER_SIZE)) {
+		ERR("Invalid cursor dimensions: width=%d, height=%d. Max allowed is %d.\n", cptr->width, cptr->height, POINTER_SIZE);
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
 	}
 
 	RtlZeroMemory(&pointerShape, sizeof(POINTER_SHAPE));
@@ -708,11 +817,41 @@ static NTSTATUS IoctlSetPointerShape(
 	pointerShape.Y = cptr->cursor_y;
 
 	status = pAdapter->SetPointerShape(&pointerShape, cptr->color_format, cptr->iscursorvisible);
-
 	if (status != STATUS_SUCCESS) {
 		ERR("SetPointerShape failed with status = %d\n", status);
+		WdfRequestComplete(Request, STATUS_UNSUCCESSFUL);
 		return STATUS_UNSUCCESSFUL;
 	}
+
+	if (OutputBufferLength < sizeof(struct KMDF_IOCTL_Response)) {
+		ERR("Output Buffer is too small: provided = %Iu, expected >= %Iu\n", OutputBufferLength, sizeof(struct KMDF_IOCTL_Response));
+		WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
+		return STATUS_BUFFER_TOO_SMALL;
+	}
+
+	if (outBuffer == NULL) {
+		ERR("Output buffer is NULL\n");
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	__try {
+		ProbeForWrite(outBuffer, sizeof(KMDF_IOCTL_Response), __alignof(KMDF_IOCTL_Response));
+		output = (KMDF_IOCTL_Response*)outBuffer;
+		if (output == NULL) {
+			ERR("Output buffer is NULL\n");
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		status = GetExceptionCode();
+		ERR("Exception while writing to output buffer: 0x%X\n", status);
+		WdfRequestComplete(Request, status);
+		return status;
+	}
+	output->retval = DVSERVERKMD_SUCCESS;
+	WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 	return STATUS_SUCCESS;
 }
 
@@ -733,29 +872,34 @@ static NTSTATUS IoctlSetPointerPosition(
 
 	if (!pAdapter) {
 		ERR("Couldnt' find adapter\n");
-		return status;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
 	if (InputBufferLength < sizeof(struct CursorData)) {
 		ERR("Input Buffer is too small: provided = %Iu, expected >= %Iu\n", InputBufferLength, sizeof(struct CursorData));
+		 WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
 		return STATUS_BUFFER_TOO_SMALL;
 	}
 
 	status = WdfRequestRetrieveInputBuffer(Request, InputBufferLength, (PVOID*)&cptr, &bufSize);
 	if (!NT_SUCCESS(status)) {
 		ERR("Couldn't retrieve Input buffer\n");
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		WdfRequestComplete(Request, STATUS_INVALID_USER_BUFFER);
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
 	if (cptr == NULL) {
+		ERR("Input buffer is NULL\n");
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
 		return STATUS_UNSUCCESSFUL;
 	}
 
 	if (cptr->screen_num >= MAX_SCAN_OUT) {
 		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
 			cptr->screen_num, MAX_SCAN_OUT);
-		return STATUS_UNSUCCESSFUL;
+		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
+		return STATUS_INVALID_PARAMETER;
 	}
 
 	RtlZeroMemory(&pointerPosition, sizeof(DXGKARG_SETPOINTERPOSITION));
@@ -767,6 +911,7 @@ static NTSTATUS IoctlSetPointerPosition(
 
 	if (status != STATUS_SUCCESS) {
 		ERR("SetPointerPosition failed with status = %d\n", status);
+		WdfRequestComplete(Request, STATUS_UNSUCCESSFUL);
 		return STATUS_UNSUCCESSFUL;
 	}
 	return STATUS_SUCCESS;

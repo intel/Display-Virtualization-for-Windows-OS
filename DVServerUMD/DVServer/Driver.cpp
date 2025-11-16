@@ -45,7 +45,6 @@ HANDLE g_hpdthread_handle = NULL;
 IDDCX_MONITOR g_monitorobject_list[MAX_SCAN_OUT] = { 0 };
 
 BOOL hwcursorsupported = TRUE;
-int idd_version;
 
 #pragma region SampleMonitors
 
@@ -64,9 +63,9 @@ IDDCX_MONITOR g_DvserverCxMonitorObject[MAX_SCAN_OUT] = { 0 };
 IDARG_IN_QUERY_HWCURSOR g_inputargs[MAX_SCAN_OUT] = { 0 };
 Microsoft::WRL::Wrappers::Event g_dvserver_cursor_os_event[MAX_SCAN_OUT];
 
-#define CURSOR_BUFFER_SIZE				128*1024
-#define CURSOR_MAX_WIDTH				32
-#define CURSOR_MAX_HEIGHT				32
+#define CURSOR_BUFFER_SIZE				128*128*4*8 // 128x128 RGBA cursor, 8 bits per pixel
+#define CURSOR_MAX_WIDTH				128
+#define CURSOR_MAX_HEIGHT				128
 #define INITIAL_CURSOR_SHAPE_ID			0
 #define DVSERVER_CURSOREVENT_WAIT_TIMEOUT	16 // 16ms wait timeout for the IDD cursor event
 
@@ -294,7 +293,6 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 
 	status_ver = IddCxGetVersion(&pOutArgs);
 	if (status_ver == STATUS_SUCCESS) {
-		idd_version = pOutArgs.IddCxVersion;
 		DBGPRINT("IDD Version: %ld", pOutArgs.IddCxVersion);
 	}
 
@@ -499,7 +497,7 @@ int DeviceInfo::get_dvserver_kmdf_device()
 #pragma region SwapChainProcessor
 
 SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent, UINT MonitorIndex)
-	: m_hSwapChain(hSwapChain), m_Device(Device), m_hAvailableBufferEvent(NewFrameEvent), m_screen_num(0), print_counter(0)
+	: m_hSwapChain(hSwapChain), m_Device(std::move(Device)), m_hAvailableBufferEvent(NewFrameEvent), m_screen_num(0), print_counter(0)
 {
 	init();
 	TRACING();
@@ -569,22 +567,24 @@ exit:
 SwapChainProcessor::~SwapChainProcessor()
 {
 	TRACING();
-	// Alert the swap-chain processing thread to terminate
-	SetEvent(m_hTerminateEvent.Get());
 	if (hwcursorsupported == TRUE) {
 		SetEvent(m_hTerminateCursorEvent.Get());
-	}
-
-	if (m_hThread.Get())
-	{
-		// Wait for the thread to terminate
-		WaitForSingleObject(m_hThread.Get(), INFINITE);
 	}
 
 	if (m_hCursorThread.Get())
 	{
 		// Wait for the thread to terminate
 		WaitForSingleObject(m_hCursorThread.Get(), INFINITE);
+	}
+
+	// Alert the swap-chain processing thread to terminate
+	SetEvent(m_hTerminateEvent.Get());
+
+
+	if (m_hThread.Get())
+	{
+		// Wait for the thread to terminate
+		WaitForSingleObject(m_hThread.Get(), INFINITE);
 	}
 
 	//Cleanup other supporting resources
@@ -627,20 +627,26 @@ void SwapChainProcessor::cleanup_resources()
 	}
 
 	// ****** Cursor Resources ******
-	if (m_cursordata != NULL) {
-		free(m_cursordata);
-	}
+	if (hwcursorsupported == TRUE) {
+		if (m_cursordata != NULL) {
+			free(m_cursordata);
+			m_cursordata = NULL;
+		}
 
-	if (m_ioctlresp_cursor != NULL) {
-		free(m_ioctlresp_cursor);
-	}
+		if (m_ioctlresp_cursor != NULL) {
+			free(m_ioctlresp_cursor);
+			m_ioctlresp_cursor = NULL;
+		}
 
-	if (g_inputargs[m_screen_num].pShapeBuffer != NULL) {
-		free(g_inputargs[m_screen_num].pShapeBuffer);
-	}
+		if (g_inputargs[m_screen_num].pShapeBuffer != NULL) {
+			free(g_inputargs[m_screen_num].pShapeBuffer);
+			g_inputargs[m_screen_num].pShapeBuffer = NULL;
+		}
 
-	if (m_cursorthread_handle != INVALID_HANDLE_VALUE) {
-		CloseHandle(m_cursorthread_handle);
+		if (m_cursorthread_handle != INVALID_HANDLE_VALUE) {
+			CloseHandle(m_cursorthread_handle);
+			m_cursorthread_handle = NULL;
+		}
 	}
 }
 
@@ -680,6 +686,7 @@ void SwapChainProcessor::init()
 	m_GPUResourceMutex = NULL;
 	m_cursorthread_handle = NULL;
 	m_ioctlresp_cursor = NULL;
+	m_cursordata = NULL;
 }
 
 
@@ -743,6 +750,15 @@ void SwapChainProcessor::RunCore()
 		ERR("IddCxSwapChainSetDevice failed, screen = %d, err = %s\n", m_screen_num, err);
 		return;
 	}
+	if (IDD_IS_FUNCTION_AVAILABLE(IddCxSetRealtimeGPUPriority))
+	{
+		IDARG_IN_SETREALTIMEGPUPRIORITY SetPriority = {};
+		SetPriority.pDevice = DxgiDevice.Get();
+		hr = IddCxSetRealtimeGPUPriority(m_hSwapChain, &SetPriority);
+		if (FAILED(hr)) {
+			ERR("IddCxSetRealtimeGPUPriority failed\n");
+		}
+	}
 
 	//reset the resolution flag whenever there is a resolution change
 	m_resolution_changed = TRUE;
@@ -766,29 +782,9 @@ void SwapChainProcessor::RunCore()
 				m_hTerminateEvent.Get()
 			};
 			DWORD WaitResult = WaitForMultipleObjects(ARRAYSIZE(WaitHandles), WaitHandles, FALSE, 16);
-			if (WaitResult == WAIT_OBJECT_0)
+			if (WaitResult == WAIT_OBJECT_0 || WaitResult == WAIT_TIMEOUT)
 			{
 				// We have a new buffer, so try the AcquireBuffer again
-				continue;
-			}
-			else if (WaitResult == WAIT_TIMEOUT)
-			{
-				// No new buffer, so use old buffer
-				if (AcquiredBackupBuffer)
-				{
-					status = AcquiredBackupBuffer->QueryInterface(IID_PPV_ARGS(&m_IAcquiredDesktopBackupImage));
-					if (FAILED(status)) {
-						ERR("Failed QueryInterface %d\n", status);
-						AcquiredBackupBuffer.Reset();
-						break;
-					}
-					if (GetFrameData(m_Device, m_IAcquiredDesktopBackupImage) == DVSERVERUMD_FAILURE) {
-						ERR("Failed getting frame from GPU\n");
-						AcquiredBackupBuffer.Reset();
-						break;
-					}
-				}
-				// We might have new buffer, so try the AcquireBuffer again
 				continue;
 			}
 			else if (WaitResult == WAIT_OBJECT_0 + 1)
@@ -819,10 +815,6 @@ void SwapChainProcessor::RunCore()
 					AcquiredBuffer.Reset();
 					break;
 				}
-				if (AcquiredBackupBuffer) {
-					AcquiredBackupBuffer.Reset();
-				}
-				AcquiredBackupBuffer = Buffer.MetaData.pSurface;
 
 				//Get Frame	from GPU
 				if (GetFrameData(m_Device, m_IAcquiredDesktopImage) == DVSERVERUMD_FAILURE) {
@@ -1070,11 +1062,11 @@ void SwapChainProcessor::GetCursorData()
 				//Since IddCxMonitorQueryHardwareCursor2 is supported from IDD 1.7 onward.
 				// Older OS versions like Windows 10 are still limited to earlier versions, they only support IddCxMonitorQueryHardwareCursor.
 				// This check will identify the IDD version supported by the current OS and select the appropriate API call accordingly.
-				if (idd_version < IDDCX_VERSION_IRON) {
-					ProcessCursorDataLegacy(&tempshapeid, &tempX, &tempY);
+				if (IDD_IS_FUNCTION_AVAILABLE(IddCxMonitorQueryHardwareCursor2)) {
+					ProcessCursorData(&tempshapeid, &tempposid, &tempX, &tempY);
 				}
 				else {
-					ProcessCursorData(&tempshapeid, &tempposid, &tempX, &tempY);
+					ProcessCursorDataLegacy(&tempshapeid, &tempX, &tempY);
 				}
 			}
 			else if (WaitResult == WAIT_OBJECT_0 + 1) {
@@ -1105,6 +1097,8 @@ void SwapChainProcessor::GetCursorData()
 void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, INT* tempY)
 {
 	HRESULT status;
+	char err[256];
+	memset(err, 0, 256);
 	
 	SecureZeroMemory(&m0_outputargs, sizeof(struct IDARG_OUT_QUERY_HWCURSOR));
 	status = IddCxMonitorQueryHardwareCursor(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num], &m0_outputargs);
@@ -1128,7 +1122,9 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, 
 				m_cursordata, sizeof(struct CursorData), \
 				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
 				& m_ioctlresp_size, NULL)) {
-				ERR("IOCTL_DVSERVER_CURSOR_POS call failed!\n");
+				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+				ERR("IOCTL_DVSERVER_CURSOR_POS call failed with error: %s!\n", err);
 			}
 		}
 		if (shapeChanged) {
@@ -1148,7 +1144,9 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, 
 				m_cursordata, sizeof(struct CursorData), \
 				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
 				& m_ioctlresp_size, NULL)) {
-				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed!\n");
+				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed with error: %s!\n", err);
 			}
 		}
 	}
@@ -1157,6 +1155,8 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, 
 void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, INT* tempX, INT* tempY)
 {
 	HRESULT status;
+	char err[256];
+	memset(err, 0, 256);
 	
 	SecureZeroMemory(&m_outputargs, sizeof(struct IDARG_OUT_QUERY_HWCURSOR2));
 	status = IddCxMonitorQueryHardwareCursor2(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num], &m_outputargs);
@@ -1181,7 +1181,9 @@ void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, I
 				m_cursordata, sizeof(struct CursorData), \
 				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
 				& m_ioctlresp_size, NULL)) {
-				ERR("IOCTL_DVSERVER_CURSOR_POS call failed!\n");
+				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+				ERR("IOCTL_DVSERVER_CURSOR_POS call failed with error: %s!\n", err);
 			}
 		}
 		if (shapeChanged) {
@@ -1201,7 +1203,9 @@ void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, I
 				m_cursordata, sizeof(struct CursorData), \
 				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
 				& m_ioctlresp_size, NULL)) {
-				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed!\n");
+				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed with error: %s!\n", err);
 			}
 		}
 	}
@@ -1461,7 +1465,7 @@ void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID Ren
 			IndirectMonitorContext::SetupDVServerCursor();
 		}
 		// Create a new swap-chain processing thread
-		m_ProcessingThread.reset(new SwapChainProcessor(SwapChain, Device, NewFrameEvent, m_MonitorIndex));
+		m_ProcessingThread.reset(new SwapChainProcessor(SwapChain, std::move(Device), NewFrameEvent, m_MonitorIndex));
 	}
 }
 
@@ -1744,7 +1748,7 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		return DVSERVERUMD_FAILURE;
 	}
 
-	ERR("Shared memory section created successfully\n");
+	DBGPRINT("Shared memory section created successfully\n");
 
 	struct disp_info* pSharedMem = (struct disp_info*)MapViewOfFile(
 		hSharedMem,          // Handle to the shared memory section
@@ -1870,7 +1874,7 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 			}
 
 			if ((do_set_event)) {
-				ERR("disp_count = %d", dinfo.disp_count);
+				DBGPRINT("disp_count = %d", dinfo.disp_count);
 				WaitForSingleObject(pSharedMem->mutex, INFINITE);
 				pSharedMem->disp_count = dinfo.disp_count;
 				ReleaseMutex(pSharedMem->mutex);
@@ -1930,6 +1934,8 @@ int get_hpd_data(HANDLE devHandle, hp_info* data)
 	TRACING();
 
 	int i;
+	char err[256];
+	memset(err, 0, 256);
 
 	g_hdata = (struct hp_info*)malloc(sizeof(struct hp_info));
 	if (g_hdata == NULL) {
@@ -1941,7 +1947,9 @@ int get_hpd_data(HANDLE devHandle, hp_info* data)
 	g_hdata->event = data->event;
 
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_HP_EVENT, g_hdata, sizeof(struct hp_info), g_hdata, sizeof(struct hp_info), &g_bytesReturned, NULL)) {
-		ERR("IOCTL_DVSERVER_HPD_EVENT  call failed\n");
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		ERR("IOCTL_DVSERVER_HPD_EVENT call failed with error: %s!\n", err);
 		free(g_hdata);
 		return DVSERVERUMD_FAILURE;
 	}

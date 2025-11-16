@@ -131,8 +131,6 @@ namespace Microsoft
 			//FrameMetaData related 
 			ID3D11Texture2D* m_destimage;
 			ID3D11Texture2D* m_IAcquiredDesktopImage;
-			ID3D11Texture2D* m_IAcquiredDesktopBackupImage;
-			Microsoft::WRL::ComPtr<IDXGIResource> AcquiredBackupBuffer;
 			D3D11_MAPPED_SUBRESOURCE m_staging_buffer;
 			D3D11_TEXTURE2D_DESC m_input_desc, m_staging_desc;
 			uint32_t m_width, m_height, m_pitch, m_stride;

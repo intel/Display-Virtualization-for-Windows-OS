@@ -38,6 +38,9 @@ unsigned int blacklisted_resolution_list[][2] = { {1400,1050} }; // blacklisted 
 int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 {
 	TRACING();
+	char err[256];
+	memset(err, 0, 256);
+
 	IndirectSampleMonitor* monitor = (IndirectSampleMonitor*)m;
 	unsigned int i = 0, edid_mode_index = 0;
 
@@ -78,7 +81,7 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 		};
 
 	if (d_edid == TRUE) {
-		ERR("get Default EDID for Primary Index monitor \n");
+		DBGPRINT("get Default EDID for Primary Index monitor \n");
 		memcpy_s(monitor, sizeof(s_SampleMonitors), s_SampleMonitors, sizeof(s_SampleMonitors));
 		return DVSERVERUMD_SUCCESS;
 	}
@@ -93,7 +96,9 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 
 	DBGPRINT("Requesting EDID info through EDID IOCTL for screen = %d\n", edata->screen_num);
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_EDID_DATA, edata, sizeof(struct edid_info), edata, sizeof(struct edid_info), &bytesReturned, NULL)) {
-		ERR("IOCTL_DVSERVER_GET_EDID_DATA call failed\n");
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		ERR("IOCTL_DVSERVER_GET_EDID_DATA call failed with error: %s!\n", err);
 		free(edata);
 		return DVSERVERUMD_FAILURE;
 	}
@@ -148,6 +153,9 @@ int get_edid_data(HANDLE devHandle, void *m, DWORD id, BOOL d_edid)
 int get_total_screens(HANDLE devHandle)
 {
 	TRACING();
+	char err[256];
+	memset(err, 0, 256);
+
 	int ret = DVSERVERUMD_FAILURE;
 
 	if (!devHandle) {
@@ -164,7 +172,9 @@ int get_total_screens(HANDLE devHandle)
 
 	DBGPRINT("Requesting Screen Count through Screen IOCTL\n");
 	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_GET_TOTAL_SCREENS, mdata, sizeof(struct screen_info), mdata, sizeof(struct screen_info), &bytesReturned, NULL)) {
-		ERR("IOCTL_DVSERVER_GET_TOTAL_SCREENS call failed\n");
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		ERR("IOCTL_DVSERVER_GET_TOTAL_SCREENS call failed with error: %s!\n", err);
 		free(mdata);
 		return ret;
 	}

@@ -83,7 +83,9 @@ extern "C" {
 #define MAX_VIEWS                  1
 #define BITS_PER_BYTE              8
 
-#define POINTER_SIZE               64
+#define POINTER_SIZE               128
+#define MAX_WIDTH_SIZE             3840
+#define MAX_HEIGHT_SIZE            2160
 #define MIN_WIDTH_SIZE             640
 #define MIN_HEIGHT_SIZE            480
 #define NOM_WIDTH_SIZE             1024

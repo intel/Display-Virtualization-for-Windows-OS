@@ -120,7 +120,8 @@ public:
 
 class IVioGpuAdapterLite {
 public:
-	IVioGpuAdapterLite(_In_ PVOID pvDevcieContext) { m_pvDeviceContext = pvDevcieContext; m_bEDID = FALSE; m_Id = 0; }
+	IVioGpuAdapterLite(_In_ PVOID pvDevcieContext) { m_pvDeviceContext = pvDevcieContext; m_bEDID = FALSE; m_Id = 0; RtlZeroMemory(&m_screen_mutex, sizeof(m_screen_mutex));
+	}
 	virtual ~IVioGpuAdapterLite(void) { ; }
 	virtual NTSTATUS SetPowerState(DEVICE_POWER_STATE DevicePowerState) = 0;
 	virtual NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION* pDispInfo) = 0;
