@@ -71,6 +71,7 @@ static NTSTATUS IoctlRequestHPEventInfo(
 static NTSTATUS IoctlSetPointerShape(
 	const PDEVICE_CONTEXT DeviceContext,
 	const size_t          InputBufferLength,
+	const size_t          OutputBufferLength,
 	const WDFREQUEST      Request);
 
 static NTSTATUS IoctlSetPointerPosition(

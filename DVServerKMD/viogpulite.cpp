@@ -72,6 +72,9 @@ ScreenInfo::ScreenInfo()
 	enabled = FALSE;
 	RtlZeroMemory(&mode_list, sizeof(output_modelist));
 	RtlZeroMemory(&gpu_disp_mode_ext, sizeof(GPU_DISP_MODE_EXT) * MAX_MODELIST_SIZE);
+	RtlZeroMemory(&m_DisplayInfoEvent.Header, sizeof(m_DisplayInfoEvent.Header));
+	RtlZeroMemory(&m_EdidEvent.Header, sizeof(m_EdidEvent.Header));
+	RtlZeroMemory(&m_FlushEvent.Header, sizeof(m_FlushEvent.Header));
 }
 
 ScreenInfo::~ScreenInfo()
@@ -328,6 +331,7 @@ NTSTATUS VioGpuAdapterLite::SetPowerState(DEVICE_POWER_STATE DevicePowerState)
 	case PowerDeviceD2:
 	case PowerDeviceD3: {
 		VioGpuAdapterLiteClose();
+		HWClose();
 	} break;
 	}
 	return STATUS_SUCCESS;
@@ -530,23 +534,29 @@ NTSTATUS VioGpuAdapterLite::HWClose(void)
 	LARGE_INTEGER timeout = { 0 };
 	timeout.QuadPart = Int32x32To64(1000, -10000);
 
-	m_bStopWorkThread = TRUE;
-	KeSetEvent(&m_ConfigUpdateEvent, IO_NO_INCREMENT, FALSE);
+	if (m_pWorkThread) {
+		m_bStopWorkThread = TRUE;
+		KeSetEvent(&m_ConfigUpdateEvent, IO_NO_INCREMENT, FALSE);
 
-	if (KeWaitForSingleObject(m_pWorkThread,
-		Executive,
-		KernelMode,
-		FALSE,
-		&timeout) == STATUS_TIMEOUT) {
-		ERR("---> Failed to exit the worker thread\n");
-		VioGpuDbgBreak();
+		if (KeWaitForSingleObject(m_pWorkThread,
+			Executive,
+			KernelMode,
+			FALSE,
+			&timeout) == STATUS_TIMEOUT) {
+			ERR("---> Failed to exit the worker thread\n");
+			VioGpuDbgBreak();
+		}
+
+		ObDereferenceObject(m_pWorkThread);
+		m_pWorkThread = NULL;
 	}
-
-	ObDereferenceObject(m_pWorkThread);
-
 	for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
-		m_screen[i].m_FrameSegment.Close();
-		m_screen[i].m_CursorSegment.Close();
+		if (m_screen[i].m_FrameSegment.GetFbVAddr()) {
+			m_screen[i].m_FrameSegment.Close();
+		}
+		if (m_screen[i].m_CursorSegment.GetFbVAddr()) {
+			m_screen[i].m_CursorSegment.Close();
+		}
 	}
 	return STATUS_SUCCESS;
 }
@@ -704,6 +714,7 @@ NTSTATUS VioGpuAdapterLite::SetPointerShape(_In_ CONST POINTER_SHAPE* pSetPointe
 		crsr->hot_y = pSetPointerShape->pointer.YHot;
 		ret = m_CursorQueue.QueueCursor(vbuf);
 		DBGPRINT("vbuf = %p, ret = %d\n", vbuf, ret);
+		m_screen[pSetPointerShape->pointer.VidPnSourceId].m_CursorSegment.Close();
 		if (ret == 0) {
 			return STATUS_SUCCESS;
 		}
@@ -1266,6 +1277,11 @@ BOOLEAN VioGpuAdapterLite::CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerSha
 		m_CtrlQueue.CreateResource(resid, format, POINTER_SIZE, POINTER_SIZE);
 	}
 
+	if (!m_screen[pSetPointerShape->pointer.VidPnSourceId].m_CursorSegment.GetFbVAddr()) {
+			m_screen[pSetPointerShape->pointer.VidPnSourceId].m_CursorSegment.Init(size, NULL);
+	}
+
+
 	obj = new(NonPagedPoolNx) VioGpuObj();
 	if (!obj->Init(size, &m_screen[pSetPointerShape->pointer.VidPnSourceId].m_CursorSegment))
 	{
@@ -1283,13 +1299,13 @@ BOOLEAN VioGpuAdapterLite::CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerSha
 
 	m_screen[pSetPointerShape->pointer.VidPnSourceId].m_pCursorBuf = obj;
 
-	RECT Rect;
+	RECT Rect = { 0 };
 	Rect.left = 0;
 	Rect.top = 0;
 	Rect.right = Rect.left + pSetPointerShape->pointer.Width;
 	Rect.bottom = Rect.top + pSetPointerShape->pointer.Height;
 
-	BLT_INFO DstBltInfo;
+	BLT_INFO DstBltInfo = { 0 };
 	DstBltInfo.pBits = m_screen[pSetPointerShape->pointer.VidPnSourceId].m_pCursorBuf->GetVirtualAddress();
 	DstBltInfo.Pitch = POINTER_SIZE * 4;
 	DstBltInfo.PixelFmt = D3DDDIFMT_A8B8G8R8;
@@ -1299,8 +1315,9 @@ BOOLEAN VioGpuAdapterLite::CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerSha
 	DstBltInfo.Rotation = D3DKMDT_VPPR_IDENTITY;
 	DstBltInfo.Width = POINTER_SIZE;
 	DstBltInfo.Height = POINTER_SIZE;
+	RtlFillMemory(DstBltInfo.pBits, DstBltInfo.Pitch * DstBltInfo.Height, 0x00);
 
-	BLT_INFO SrcBltInfo;
+	BLT_INFO SrcBltInfo = { 0 };
 	SrcBltInfo.pBits = (PVOID)pSetPointerShape->pointer.pPixels;
 	SrcBltInfo.Pitch = pSetPointerShape->pointer.Pitch;
 	SrcBltInfo.PixelFmt = D3DDDIFMT_A8R8G8B8;

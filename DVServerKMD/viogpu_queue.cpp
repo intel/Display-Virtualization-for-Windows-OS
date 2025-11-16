@@ -700,6 +700,10 @@ BOOLEAN VioGpuBuf::Init(_In_ UINT cnt)
 	for (UINT i = 0; i < cnt; ++i) {
 		PGPU_VBUFFER pvbuf = reinterpret_cast<PGPU_VBUFFER>
 			(new (NonPagedPoolNx) BYTE[VBUFFER_SIZE]);
+		if (!pvbuf) {
+			ERR("Failed to allocate %d bytes\n", VBUFFER_SIZE);
+			break;
+		}
 		//FIXME
 		RtlZeroMemory(pvbuf, VBUFFER_SIZE);
 		if (pvbuf)
@@ -797,8 +801,6 @@ PGPU_VBUFFER VioGpuBuf::GetBuf(
 	{
 		pListItem = RemoveHeadList(&m_FreeBufs);
 		pbuf = CONTAINING_RECORD(pListItem, GPU_VBUFFER, list_entry);
-		if (!pbuf)
-			return NULL;
 
 		memset(pbuf, 0, VBUFFER_SIZE);
 		pbuf->buf = (char*)((ULONG_PTR)pbuf + sizeof(*pbuf));
