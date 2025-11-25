@@ -750,15 +750,33 @@ void SwapChainProcessor::RunCore()
 		ERR("IddCxSwapChainSetDevice failed, screen = %d, err = %s\n", m_screen_num, err);
 		return;
 	}
-	if (IDD_IS_FUNCTION_AVAILABLE(IddCxSetRealtimeGPUPriority))
-	{
-		IDARG_IN_SETREALTIMEGPUPRIORITY SetPriority = {};
-		SetPriority.pDevice = DxgiDevice.Get();
-		hr = IddCxSetRealtimeGPUPriority(m_hSwapChain, &SetPriority);
-		if (FAILED(hr)) {
-			ERR("IddCxSetRealtimeGPUPriority failed\n");
+	DWORD gpuDeviceId = GetGpuDeviceId();
+	if (gpuDeviceId != 0)
+		DBGPRINT("GPU PCI Device ID: 0x%04X\n", gpuDeviceId);
+	else
+		DBGPRINT("No GPU PCI Device ID found.\n");
+
+	switch (gpuDeviceId) {
+		case DEV_ID_7D40:
+		case DEV_ID_7D45:
+		case DEV_ID_7D55:
+		case DEV_ID_7D60:
+		case DEV_ID_7D67:
+		case DEV_ID_7DD5:
+			DBGPRINT("IddCxSetRealtimeGPUPriority skipped");
+			break;
+		default:
+			DBGPRINT("IddCxSetRealtimeGPUPriority engaged");
+			if (IDD_IS_FUNCTION_AVAILABLE(IddCxSetRealtimeGPUPriority)) {
+				IDARG_IN_SETREALTIMEGPUPRIORITY SetPriority = {};
+				SetPriority.pDevice = DxgiDevice.Get();
+				hr = IddCxSetRealtimeGPUPriority(m_hSwapChain, &SetPriority);
+				if (FAILED(hr)) {
+					ERR("IddCxSetRealtimeGPUPriority failed\n");
+				}
+			}
+			break;
 		}
-	}
 
 	//reset the resolution flag whenever there is a resolution change
 	m_resolution_changed = TRUE;
@@ -1995,4 +2013,54 @@ bool IsWindows11OrLater()
 	return true;
 }
 
+DWORD GetGpuDeviceId()
+{
+	HDEVINFO deviceInfoSet = SetupDiGetClassDevs(&GUID_DEVCLASS_DISPLAY, nullptr, nullptr, DIGCF_PRESENT);
+	if (deviceInfoSet == INVALID_HANDLE_VALUE) {
+		ERR("SetupDiGetClassDevs failed.\n");
+		return 0;
+	}
+
+	DWORD deviceIdFromPci = 0;
+	SP_DEVINFO_DATA deviceInfoData = {};
+	deviceInfoData.cbSize = sizeof(SP_DEVINFO_DATA);
+
+	std::regex deviceIdRegex(DEVICE_ID_REGEX_PATTERN);
+	std::smatch match;
+
+	for (DWORD i = 0; i < MAX_ENUM_ATTEMPTS; ++i) {
+		if (!SetupDiEnumDeviceInfo(deviceInfoSet, i, &deviceInfoData))
+			break;
+
+		TCHAR deviceInstanceId[MAX_DEVICE_ID_LEN];
+		if (CM_Get_Device_ID(deviceInfoData.DevInst, deviceInstanceId, MAX_DEVICE_ID_LEN, 0) == CR_SUCCESS) {
+			std::wstring instanceId(deviceInstanceId);
+
+			// Convert wide string to UTF-8
+			int size_needed = WideCharToMultiByte(CP_UTF8, 0, instanceId.c_str(), -1, nullptr, 0, nullptr, nullptr);
+			std::string instanceIdStr(size_needed, 0);
+			WideCharToMultiByte(CP_UTF8, 0, instanceId.c_str(), -1, &instanceIdStr[0], size_needed, nullptr, nullptr);
+
+
+			if (std::regex_search(instanceIdStr, match, deviceIdRegex)) {
+				try {
+					deviceIdFromPci = std::stoul(match[1].str(), nullptr, 16);
+					// Validate range (for safety, PCI Device IDs are 16-bit)
+					if (deviceIdFromPci > 0xFFFF) {
+						ERR("Invalid Device ID extracted: 0x%08X\n", deviceIdFromPci);
+						deviceIdFromPci = 0;
+					}
+					break;
+				}
+				catch (const std::exception&) {
+					ERR("Error parsing Device ID from string: %s\n", match[1].str().c_str());
+				}
+			}
+		}
+	}
+
+	SetupDiDestroyDeviceInfoList(deviceInfoSet);
+
+	return deviceIdFromPci;
+}
 #pragma endregion
