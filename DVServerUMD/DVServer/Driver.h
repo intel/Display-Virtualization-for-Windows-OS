@@ -15,6 +15,11 @@
 #include <memory>
 #include <vector>
 
+#include <devguid.h>
+#include <string>
+#include <regex>
+#include <cfgmgr32.h>
+
 #include "Trace.h"
 #include "DVServeredid.h"
 #include "..\..\DVServerKMD\Public.h"
@@ -197,6 +202,7 @@ namespace Microsoft
 int hpd_event_create(IDDCX_ADAPTER AdapterObject);
 int get_hpd_data(HANDLE devHandle, struct hp_info* data);
 bool IsWindows11OrLater();
+DWORD GetGpuDeviceId();
 struct disp_info {
 	int disp_count;
 	HANDLE mutex;
