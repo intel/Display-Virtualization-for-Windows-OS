@@ -85,8 +85,14 @@ typedef struct _POINTER_SHAPE {
 	DXGKARG_SETPOINTERSHAPE pointer;
 } POINTER_SHAPE;
 
+enum class FrameBufSlot : UINT {
+    Front = 0,
+    Back = 1,
+};
+
 class ScreenInfo {
 public:
+	static constexpr size_t FRAMEBUFFER_COUNT = 2;
 	PVIDEO_MODE_INFORMATION m_ModeInfo;
 	ULONG m_ModeCount;
 	PUSHORT m_ModeNumbers;
@@ -99,8 +105,9 @@ public:
 	KEVENT m_EdidEvent;
 	KEVENT m_FlushEvent;
 	VioGpuMemSegment m_FrameSegment;
-	VioGpuObj* m_pFrameBuf;
-	VioGpuObj * m_pCursorBuf;
+	// important must be alligned to because of InterlockedExchangePointer usage
+	VioGpuObj* m_pFrameBuf[FRAMEBUFFER_COUNT];
+	VioGpuObj* m_pCursorBuf;
 	VioGpuMemSegment m_CursorSegment;
 	BOOL m_FlushCount;
 	BOOL enabled;
@@ -112,10 +119,16 @@ public:
 	ULONG GetModeCount(void) { return m_ModeCount; }
 	USHORT GetModeNumber(USHORT idx) { return m_ModeNumbers[idx]; }
 	USHORT GetCurrentModeIndex(void) { return m_CurrentMode; }
+	VioGpuObj* GetFrameBufferObj(FrameBufSlot buf);
+	UINT GetFrameBufferIndex(FrameBufSlot bufSlot);
+	void SetFrameBufferObj(VioGpuObj* buf, FrameBufSlot bufType);
+	void SwapFramebuffer();
 	void SetCurrentModeIndex(USHORT idx) { m_CurrentMode = idx; }
 	void SetCustomDisplay(_In_ USHORT xres, _In_ USHORT yres);
 	void SetVideoModeInfo(UINT Idx, PGPU_DISP_MODE_EXT pModeInfo);
 	void Reset();
+private:
+	UINT m_FrontBufferIndex;
 };
 
 class IVioGpuAdapterLite {
@@ -212,8 +225,9 @@ private:
 	void ProcessEdid(UINT32 screen_num);
 	BOOLEAN GetEdids(UINT32 screen_num);
 	void AddEdidModes(UINT32 screen_num);
-	void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE* pCurrentMode);
-	void DestroyFrameBufferObj(UINT32 screen_num, BOOLEAN bReset);
+	void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, FrameBufSlot bufType, CURRENT_MODE* pCurrentMode);
+	void DestroyFrameBufferSlotObj(UINT32 screen_num, FrameBufSlot bufSlot, BOOLEAN bReset);
+	void DestroyFrameBufferObj(VioGpuObj** ppFbuf, BOOLEAN bReset);
 	BOOLEAN CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf);
 	void DestroyCursor(UINT32 screen_num);
 	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
