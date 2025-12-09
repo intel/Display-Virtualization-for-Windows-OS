@@ -66,7 +66,10 @@ ScreenInfo::ScreenInfo()
 	m_ModeNumbers = NULL;
 	m_CurrentMode = 0;
 	m_CustomMode = 0;
-	m_pFrameBuf = NULL;
+	for (size_t i = 0; i < FRAMEBUFFER_COUNT; i++) {
+		m_pFrameBuf[i] = NULL;
+	}
+	m_FrontBufferIndex = 0;
 	m_pCursorBuf = NULL;
 	m_FlushCount = 0;
 	enabled = FALSE;
@@ -101,6 +104,18 @@ void ScreenInfo::Reset()
 	mode_list.modelist_size = 0;
 	RtlZeroMemory(&gpu_disp_mode_ext, sizeof(GPU_DISP_MODE_EXT) * MAX_MODELIST_SIZE);
 }
+
+void ScreenInfo::SwapFramebuffer() {
+	m_FrontBufferIndex = (m_FrontBufferIndex + 1) % FRAMEBUFFER_COUNT;
+}
+
+VioGpuObj* ScreenInfo::GetFrameBufferObj(FrameBufSlot bufSlot) {
+	return m_pFrameBuf[(m_FrontBufferIndex + (UINT) bufSlot) % FRAMEBUFFER_COUNT];
+}
+
+void ScreenInfo::SetFrameBufferObj(VioGpuObj* buf, FrameBufSlot bufSlot) {
+	m_pFrameBuf[(m_FrontBufferIndex + (UINT) bufSlot) % FRAMEBUFFER_COUNT] = buf;
+};
 
 VioGpuAdapterLite::VioGpuAdapterLite(_In_ PVOID pvDeviceContext) : IVioGpuAdapterLite(pvDeviceContext)
 {
@@ -177,8 +192,9 @@ NTSTATUS VioGpuAdapterLite::SetCurrentModeExt(CURRENT_MODE* pCurrentMode)
 		RtlCopyMemory(&m_CurrentModeInfo, pCurrentMode, sizeof(CURRENT_MODE));
 
 		if (!m_screen[pCurrentMode->DispInfo.TargetId].m_FlushCount) {
-			DestroyFrameBufferObj(pCurrentMode->DispInfo.TargetId, FALSE);
-			CreateFrameBufferObj(&m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx], pCurrentMode);
+			CreateFrameBufferObj(&m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx], FrameBufSlot::Back, pCurrentMode);
+			m_screen[pCurrentMode->DispInfo.TargetId].SwapFramebuffer();
+			DestroyFrameBufferObj(pCurrentMode->DispInfo.TargetId, FrameBufSlot::Back, FALSE);
 			DBGPRINT("screen %d: setting current mode (%d x %d)\n",
 				pCurrentMode->DispInfo.TargetId, m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx].VisScreenWidth,
 				m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx].VisScreenHeight);
@@ -676,7 +692,7 @@ VOID VioGpuAdapterLite::BlackOutScreen(CURRENT_MODE* pCurrentMod)
 		//FIXME!!! rotation
 		KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
 
-		resid = m_screen[pCurrentMod->DispInfo.TargetId].m_pFrameBuf->GetId();
+		resid = m_screen[pCurrentMod->DispInfo.TargetId].GetFrameBufferObj(FrameBufSlot::Front)->GetId();
 
 		m_CtrlQueue.TransferToHost2D(resid, 0UL, pCurrentMod->DispInfo.Width, pCurrentMod->DispInfo.Height, 0, 0, NULL);
 		m_screen[pCurrentMod->DispInfo.TargetId].m_FlushCount++;
@@ -1181,7 +1197,7 @@ UINT ColorFormat(UINT format)
 }
 
 PAGED_CODE_SEG_BEGIN
-void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE* pCurrentMode)
+void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, FrameBufSlot bufSlot, CURRENT_MODE* pCurrentMode)
 {
 	UINT resid, format, size;
 	VioGpuObj* obj;
@@ -1189,7 +1205,7 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 	TRACING();
 	DBGPRINT("%d: %d, (%d x %d)\n", m_Id, pCurrentMode->DispInfo.TargetId,
 		pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight);
-	ASSERT(m_screen[pCurrentMode->DispInfo.TargetId].m_pFrameBuf == NULL);
+	ASSERT(m_screen[pCurrentMode->DispInfo.TargetId].GetFrameBufferObj(bufSlot) == NULL);
 	size = pCurrentMode->DispInfo.Pitch * pModeInfo->VisScreenHeight;
 	format = ColorFormat(pCurrentMode->DispInfo.ColorFormat);
 	DBGPRINT("(%d -> %d)\n", pCurrentMode->DispInfo.ColorFormat, format);
@@ -1220,46 +1236,45 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 
 	if (m_bBlobSupported)
 	{
-		m_CtrlQueue.SetScanoutBlob(pCurrentMode->DispInfo.TargetId, resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, format, 0, 0,pCurrentMode->Stride);
+		m_CtrlQueue.SetScanoutBlob(pCurrentMode->DispInfo.TargetId, resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, format, 0, 0, pCurrentMode->Stride);
 	}
 	else
 	{
 		m_CtrlQueue.SetScanout(pCurrentMode->DispInfo.TargetId, resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, 0, 0);
+		m_CtrlQueue.TransferToHost2D(resid, 0, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, 0, 0, NULL);
 	}
-	m_CtrlQueue.TransferToHost2D(resid, 0, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, 0, 0, NULL);
 	m_screen[pCurrentMode->DispInfo.TargetId].m_FlushCount++;
 	DBGPRINT("Screen num = %d, flushcount = %d\n", pCurrentMode->DispInfo.TargetId, m_screen[pCurrentMode->DispInfo.TargetId].m_FlushCount);
 	m_CtrlQueue.ResFlush(resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, 0, 0, pCurrentMode->DispInfo.TargetId,
 		&m_screen[pCurrentMode->DispInfo.TargetId].m_FlushEvent);
-	m_screen[pCurrentMode->DispInfo.TargetId].m_pFrameBuf = obj;
+	m_screen[pCurrentMode->DispInfo.TargetId].SetFrameBufferObj(obj, bufSlot);
 	pCurrentMode->FrameBuffer.Ptr = obj->GetVirtualAddress();
 	pCurrentMode->Flags.FrameBufferIsActive = TRUE;
 }
 
-void VioGpuAdapterLite::DestroyFrameBufferObj(UINT32 screen_num, BOOLEAN bReset)
+void VioGpuAdapterLite::DestroyFrameBufferObj(UINT32 screen_num, FrameBufSlot bufSlot, BOOLEAN bReset)
 {
 	PAGED_CODE();
 	TRACING();
 	UINT resid = 0;
 
-	if (m_screen[screen_num].m_pFrameBuf != NULL)
-	{
-		resid = (UINT)m_screen[screen_num].m_pFrameBuf->GetId();
-		//if (bReset == TRUE) {
-		//    m_CtrlQueue.SetScanout(0/*FIXME m_Id*/, resid, 1024, 768, 0, 0);
-		//    m_CtrlQueue.TransferToHost2D(resid, 0, 1024, 768, 0, 0, NULL);
-		//    m_CtrlQueue.ResFlush(resid, 1024, 768, 0, 0);
-		//}
-		//m_CtrlQueue.SetScanout(0/*FIXME m_Id*/, resid, 1024, 768, 0, 0);
-		m_CtrlQueue.InvalBacking(resid);
-		m_CtrlQueue.UnrefResource(resid);
-		if (bReset == TRUE) {
-			m_CtrlQueue.SetScanout(0/*FIXME m_Id*/, 0, 0, 0, 0, 0);
-		}
-		delete m_screen[screen_num].m_pFrameBuf;
-		m_screen[screen_num].m_pFrameBuf = NULL;
-		m_Idr.PutId(resid);
+	VioGpuObj* fbuf = m_screen[screen_num].GetFrameBufferObj(bufSlot);
+	if (fbuf == NULL) return;
+	resid = (UINT)fbuf->GetId();
+	//if (bReset == TRUE) {
+	//    m_CtrlQueue.SetScanout(0/*FIXME m_Id*/, resid, 1024, 768, 0, 0);
+	//    m_CtrlQueue.TransferToHost2D(resid, 0, 1024, 768, 0, 0, NULL);
+	//    m_CtrlQueue.ResFlush(resid, 1024, 768, 0, 0);
+	//}
+	//m_CtrlQueue.SetScanout(0/*FIXME m_Id*/, resid, 1024, 768, 0, 0);
+	m_CtrlQueue.InvalBacking(resid);
+	m_CtrlQueue.UnrefResource(resid);
+	if (bReset == TRUE) {
+		m_CtrlQueue.SetScanout(0/*FIXME m_Id*/, 0, 0, 0, 0, 0);
 	}
+	m_screen[screen_num].SetFrameBufferObj(NULL, bufSlot);
+	delete fbuf;
+	m_Idr.PutId(resid);
 }
 
 BOOLEAN VioGpuAdapterLite::CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf)
@@ -1421,7 +1436,8 @@ void VioGpuAdapterLite::DestroyFrameBufferCursorObjExt()
 	TRACING();
 
 	for (UINT32 i = 0; i < m_u32NumScanouts; i++) {
-		DestroyFrameBufferObj(i, TRUE);
+		DestroyFrameBufferObj(i, FrameBufSlot::Front, TRUE);
+		DestroyFrameBufferObj(i, FrameBufSlot::Back, TRUE);
 		DestroyCursor(i);
 	}
 }
