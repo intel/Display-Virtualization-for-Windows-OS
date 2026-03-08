@@ -14,18 +14,18 @@
 static BOOL dvDisplaySwitch();
 
 /*******************************************************************************
-*
-* Description
-*
-* dvGetRegistryPath: Gets the Powershell path from the windows registry.
-*
-* Parameters
-*   none.
-*
-* Return val
-*  Powershell path- On success, Empty string - on Failure
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvGetRegistryPath: Gets the Powershell path from the windows registry.
+ *
+ * Parameters
+ *   none.
+ *
+ * Return val
+ *  Powershell path- On success, Empty string - on Failure
+ *
+ ******************************************************************************/
 static std::wstring dvGetRegistryPath()
 {
 	HKEY hkey;
@@ -40,34 +40,32 @@ static std::wstring dvGetRegistryPath()
 		if (dwRet == ERROR_SUCCESS) {
 			RegCloseKey(hkey);
 			return std::wstring(buffer);
-		}
-		else {
+		} else {
 			DBGPRINT("failed to retrieve with error code %d", dwRet);
 			RegCloseKey(hkey);
 			return L"";
 		}
-	}
-	else {
+	} else {
 		DBGPRINT("Failed to open key:Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 	}
 	return L"";
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvRegisterTaskSchedular: Register commands with the task schedular to
-*  start DVenabler on workstation unlock and kill dvenabler on workstation lock
-*
-*
-* Parameters
-*   none.
-*
-* Return val
-*  Powershell path- On success, Empty string - on Failure
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvRegisterTaskSchedular: Register commands with the task schedular to
+ *  start DVenabler on workstation unlock and kill dvenabler on workstation lock
+ *
+ *
+ * Parameters
+ *   none.
+ *
+ * Return val
+ *  Powershell path- On success, Empty string - on Failure
+ *
+ ******************************************************************************/
 static BOOL dvRegisterTaskSchedular()
 {
 	WCHAR commandLine[MAX_PATH + 50];
@@ -75,7 +73,8 @@ static BOOL dvRegisterTaskSchedular()
 	DWORD lpExitCode = 9999;
 	PROCESS_INFORMATION pi;
 	BOOL result = FALSE;
-	const wchar_t* scrtipContent = LR"($TASK_SESSION_UNLOCK = 8 #TASK_SESSION_STATE_CHANGE_TYPE.TASK_SESSION_UNLOCK (taskschd.h)
+	const wchar_t *scrtipContent =
+		LR"($TASK_SESSION_UNLOCK = 8 #TASK_SESSION_STATE_CHANGE_TYPE.TASK_SESSION_UNLOCK (taskschd.h)
 	$TASK_SESSION_LOCK = 7  #TASK_SESSION_STATE_CHANGE_TYPE.TASK_SESSION_LOCK (taskschd.h)
 
 	$stateChangeTrigger = Get-CimClass `
@@ -124,8 +123,9 @@ exit 1
 			scriptFile << scrtipContent;
 			scriptFile.close();
 			DBGPRINT("tempscript.ps1 file created");
-			//Construct powershell command to be executed
-			swprintf(commandLine, (MAX_PATH + 50), L"%s -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%s\"", powershellPath.c_str(), L"tempscript.ps1");
+			// Construct powershell command to be executed
+			swprintf(commandLine, (MAX_PATH + 50), L"%s -WindowStyle Hidden -ExecutionPolicy Bypass -File \"%s\"",
+					 powershellPath.c_str(), L"tempscript.ps1");
 
 			ZeroMemory(&si, sizeof(si));
 			si.cb = sizeof(si);
@@ -139,12 +139,10 @@ exit 1
 			WaitForSingleObject(pi.hProcess, INFINITE);
 			if (!GetExitCodeProcess(pi.hProcess, &lpExitCode)) {
 				ERR("failed to get return value of the script execution");
-			}
-			else {
+			} else {
 				if (!lpExitCode) {
 					ERR("failed to run the script");
-				}
-				else {
+				} else {
 					DBGPRINT("Taskschedular registration is successful");
 					result = TRUE;
 				}
@@ -157,8 +155,7 @@ exit 1
 				ERR("Failed to remove tempscript.ps1");
 			}
 		}
-	}
-	catch (const std::exception& e) {
+	} catch (const std::exception &e) {
 		ERR("an exception occurred while fetching the powershell path");
 		return FALSE;
 	}
@@ -166,26 +163,26 @@ exit 1
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvStartDLL: Starts DVEnabler.dll through rundll32.exe.
-*
-* Parameters
-*   none.
-*
-* Return val
-* BOOL - TRUE on success, FALSE on failure
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvStartDLL: Starts DVEnabler.dll through rundll32.exe.
+ *
+ * Parameters
+ *   none.
+ *
+ * Return val
+ * BOOL - TRUE on success, FALSE on failure
+ *
+ ******************************************************************************/
 static BOOL dvStartDLL()
 {
 	LPCWSTR argument = DVINSTALLER_RUNDLL_ARGUMENT;
 	LPCWSTR command = DVINSTALLER_RUNDLL_EXE;
 	wchar_t system32Path[MAX_PATH];
-	const wchar_t* path0 = L".\\";
-	wchar_t* dllCmdPath = nullptr;
-	wchar_t* dllArgPath = nullptr;
+	const wchar_t *path0 = L".\\";
+	wchar_t *dllCmdPath = nullptr;
+	wchar_t *dllArgPath = nullptr;
 	BOOL result = FALSE;
 	BOOL DisplayPathEnabled = FAIL;
 
@@ -211,12 +208,11 @@ static BOOL dvStartDLL()
 		LocalFree(dllCmdPath);
 		return FALSE;
 	}
-	
+
 	DisplayPathEnabled = dvDisplaySwitch();
 	if (DisplayPathEnabled != SUCCESS) {
 		ERR("Failed to do DisplaySwitch");
-	}
-	else {
+	} else {
 		result = TRUE;
 		DBGPRINT("DisplaySwitch is successful");
 	}
@@ -227,18 +223,18 @@ static BOOL dvStartDLL()
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvCopyDLL: Copies DVEnabler.dll to system32 path for starting during every system boot.
-*
-* Parameters
-*   none.
-*
-* Return val
-* BOOL - TRUE on success, FALSE on failure
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvCopyDLL: Copies DVEnabler.dll to system32 path for starting during every system boot.
+ *
+ * Parameters
+ *   none.
+ *
+ * Return val
+ * BOOL - TRUE on success, FALSE on failure
+ *
+ ******************************************************************************/
 static BOOL dvCopyDLL()
 {
 	TCHAR system32Path[MAX_PATH];
@@ -265,7 +261,7 @@ static BOOL dvCopyDLL()
 		ERR("Failed to Copy to the system path with error %d", GetLastError());
 		return FALSE;
 	}
-	//Extra check
+	// Extra check
 	if (GetFileAttributes(dllDestPath) == INVALID_FILE_ATTRIBUTES) {
 		ERR("dllDestPath doesn't exist");
 		return FALSE;
@@ -274,25 +270,25 @@ static BOOL dvCopyDLL()
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvIsUmdLoaded: to check if DVenabler is running or not.
-*
-*
-* Parameters
-*   none.
-*
-* Return val
-* BOOL - TRUE on success, FALSE on failure
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvIsUmdLoaded: to check if DVenabler is running or not.
+ *
+ *
+ * Parameters
+ *   none.
+ *
+ * Return val
+ * BOOL - TRUE on success, FALSE on failure
+ *
+ ******************************************************************************/
 static BOOL dvIsUmdLoaded(void)
 {
-	FILE* pPipe;
+	FILE *pPipe;
 	BOOL umdLoaded = FALSE;
-	const char* dllName = "dvserver.dll";
-	const char* processName = "WUDFhost.exe";
+	const char *dllName = "dvserver.dll";
+	const char *processName = "WUDFhost.exe";
 	char command[256], psBuffer[256];
 	TRACING();
 
@@ -303,8 +299,7 @@ static BOOL dvIsUmdLoaded(void)
 		return umdLoaded;
 	}
 	/* Read pipe until end of file, or an error occurs. */
-	while (fgets(psBuffer, sizeof(psBuffer), pPipe))
-	{
+	while (fgets(psBuffer, sizeof(psBuffer), pPipe)) {
 		if (strstr(psBuffer, dllName)) {
 			umdLoaded = TRUE;
 			DBGPRINT("UMD loaded");
@@ -316,15 +311,15 @@ static BOOL dvIsUmdLoaded(void)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvDisplaySwitch: Enables the display path.
-*
-* Parameters
-*   none.
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvDisplaySwitch: Enables the display path.
+ *
+ * Parameters
+ *   none.
+ *
+ ******************************************************************************/
 static BOOL dvDisplaySwitch()
 {
 	DISPLAYCONFIG_TARGET_BASE_TYPE baseType;
@@ -337,8 +332,8 @@ static BOOL dvDisplaySwitch()
 	baseType.baseOutputTechnology = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER;
 	/* Step 0: Get the size of buffers w.r.t active paths and modes, required for QueryDisplayConfig */
 	if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &path_count, &mode_count) != ERROR_SUCCESS) {
-		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err,
+					   255, NULL);
 		ERR("GetDisplayConfigBufferSizes failed with %s. Exiting!!!\n", err);
 		return FAIL;
 	}
@@ -349,18 +344,20 @@ static BOOL dvDisplaySwitch()
 		std::vector<DISPLAYCONFIG_MODE_INFO> mode_list(mode_count);
 
 		/* Step 1: Retrieve information about all possible display paths for all display devices */
-		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, path_list.data(), &mode_count, mode_list.data(), nullptr) != ERROR_SUCCESS) {
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, path_list.data(), &mode_count, mode_list.data(),
+							   nullptr) != ERROR_SUCCESS) {
+			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+						   err, 255, NULL);
 			ERR("QueryDisplayConfig failed with %s. Exiting!!!\n", err);
 			return FAIL;
 		}
-		for (auto& activepath_loopindex : path_list) {
+		for (auto &activepath_loopindex : path_list) {
 			baseType.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_BASE_TYPE;
 			baseType.header.size = sizeof(baseType);
 			baseType.header.adapterId = activepath_loopindex.sourceInfo.adapterId;
 			baseType.header.id = activepath_loopindex.targetInfo.id;
-			/* Step 2 : DisplayConfigGetDeviceInfo function retrieves display configuration information about the device */
+			/* Step 2 : DisplayConfigGetDeviceInfo function retrieves display configuration information about the device
+			 */
 			if (DisplayConfigGetDeviceInfo(&baseType.header) != ERROR_SUCCESS) {
 				DBGPRINT("DisplayConfigGetDeviceInfo failed... Continuing with other active paths!!!\n");
 				continue;
@@ -371,45 +368,45 @@ static BOOL dvDisplaySwitch()
 				/* Step 4: Clear the DISPLAYCONFIG_PATH_INFO.flags for MSFT path*/
 				activepath_loopindex.flags = 0;
 				DBGPRINT("Clearing Microsoft activepath_loopindex.flags.\n");
-			}
-			else {
-				/* Move the IDD source co-ordinates to (0,0)  if MSBDA monitor is listed as first monitor in the path list*/
+			} else {
+				/* Move the IDD source co-ordinates to (0,0)  if MSBDA monitor is listed as first monitor in the path
+				 * list*/
 				mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x = 0;
 				mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y = 0;
-				DBGPRINT("x, y  = %dX%x\n", mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x,
-					mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y);
+				DBGPRINT("x, y  = %dX%x\n",
+						 mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x,
+						 mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y);
 			}
 		}
-		if (SetDisplayConfig(path_count, path_list.data(), mode_count, mode_list.data(), \
-			SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE) != ERROR_SUCCESS) {
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		if (SetDisplayConfig(path_count, path_list.data(), mode_count, mode_list.data(),
+							 SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE) != ERROR_SUCCESS) {
+			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+						   err, 255, NULL);
 			ERR("SetDisplayConfig failed with %s\n", err);
 			return FAIL;
 		}
-	}
-	catch (const std::exception& e) {
+	} catch (const std::exception &e) {
 		ERR("an exception occurred while changing the display path");
 	}
 	return SUCCESS;
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvPostInstall: Post Install of DV driver changes
-*
-* Parameters
-*   none.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvPostInstall: Post Install of DV driver changes
+ *
+ * Parameters
+ *   none.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ ******************************************************************************/
 int dvPostInstall(void)
 {
-	const char* dllName = DVINSTALLER_DVSERVERDLL_NAME;
+	const char *dllName = DVINSTALLER_DVSERVERDLL_NAME;
 	WCHAR infFullPath[MAX_PATH];
 	int err, count = DLL_LOADED_MAX_RETRY;
 
@@ -425,8 +422,7 @@ int dvPostInstall(void)
 
 		if (dvInstall(INSTALL, TRUE)) {
 			ERR("manual installation of UMD failed");
-		}
-		else {
+		} else {
 			DBGPRINT("manual installation of UMD is successful");
 		}
 
@@ -434,13 +430,11 @@ int dvPostInstall(void)
 			DBGPRINT("uninstall DVServerKMD as Manual Install of UMD failed to load DVServerUMD");
 			if (dvUninstallKmdAndUmd(FALSE)) {
 				DBGPRINT("dvUninstallKmdAndUmd succeeded to uninstall\n");
-			}
-			else {
+			} else {
 				ERR("dvUninstallKmdAndUmd Failed to uninstall\n");
 			}
 			return EXIT_FAIL;
-		}
-		else {
+		} else {
 			DBGPRINT("UMD loaded after Manual install\n");
 		}
 	}
@@ -450,8 +444,7 @@ int dvPostInstall(void)
 		/* Before removing the existing dvserver.dll, check if the dll is running as service
 		if it is running, then kill the service and then remove the dll. */
 		dvKillDll(std::move(dvEnabler));
-	}
-	catch (const std::bad_alloc& e) {
+	} catch (const std::bad_alloc &e) {
 		ERR("an exception occurred while trying to kill DVenabler and DvInstaller task");
 	}
 	if (dvCopyDLL()) {

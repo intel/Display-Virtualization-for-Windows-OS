@@ -24,14 +24,14 @@ EXTERN_C_START
 //
 typedef struct _DEVICE_CONTEXT
 {
-	ULONG PrivateDeviceData;    // just a placeholder
-	PVOID pvDeviceExtension;    // for DVServerKMD
+	ULONG PrivateDeviceData; // just a placeholder
+	PVOID pvDeviceExtension; // for DVServerKMD
 	WDFDEVICE WdfDevice;
 	WDFINTERRUPT WdfInterrupt;
 	WDFCMRESLIST ResourcesRaw;
 	WDFCMRESLIST ResourcesTranslated;
-	BUS_INTERFACE_STANDARD  BusInterface;
-} DEVICE_CONTEXT, * PDEVICE_CONTEXT;
+	BUS_INTERFACE_STANDARD BusInterface;
+} DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 //
 // This macro will generate an inline function called DeviceGetContext
@@ -44,9 +44,7 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DEVICE_CONTEXT, DeviceGetContext)
 // Function to initialize the device and its callbacks
 //
 NTSTATUS
-DVServerKMDCreateDevice(
-	_Inout_ PWDFDEVICE_INIT DeviceInit
-);
+DVServerKMDCreateDevice(_Inout_ PWDFDEVICE_INIT DeviceInit);
 
 EVT_WDF_DEVICE_PREPARE_HARDWARE DVServerKMDEvtPrepareHardware;
 EVT_WDF_DEVICE_RELEASE_HARDWARE DVServerKMDEvtReleaseHardware;

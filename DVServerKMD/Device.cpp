@@ -21,13 +21,11 @@ Environment:
 #include <Device.tmh>
 
 #ifdef ALLOC_PRAGMA
-#pragma alloc_text (PAGE, DVServerKMDCreateDevice)
+#pragma alloc_text(PAGE, DVServerKMDCreateDevice)
 #endif
 
 NTSTATUS
-DVServerKMDCreateDevice(
-	_Inout_ PWDFDEVICE_INIT DeviceInit
-)
+DVServerKMDCreateDevice(_Inout_ PWDFDEVICE_INIT DeviceInit)
 /*++
 
 Routine Description:
@@ -77,7 +75,7 @@ Return Value:
 		//
 		// Create the DVServerKMD device instance
 		//
-		pDeviceContext->pvDeviceExtension = (PVOID) new(NonPagedPoolNx) VioGpuAdapterLite(pDeviceContext);
+		pDeviceContext->pvDeviceExtension = (PVOID) new (NonPagedPoolNx) VioGpuAdapterLite(pDeviceContext);
 
 		if (!pDeviceContext->pvDeviceExtension)
 			return STATUS_UNSUCCESSFUL;
@@ -86,10 +84,8 @@ Return Value:
 		// Create a device interface so that applications can find and talk
 		// to us.
 		//
-		status = WdfDeviceCreateDeviceInterface(
-			device,
-			&GUID_DEVINTERFACE_DVServerKMD,
-			NULL // ReferenceString
+		status = WdfDeviceCreateDeviceInterface(device, &GUID_DEVINTERFACE_DVServerKMD,
+												NULL // ReferenceString
 		);
 
 		if (NT_SUCCESS(status)) {
@@ -105,9 +101,7 @@ Return Value:
 			//
 			WDF_INTERRUPT_CONFIG interruptConfig;
 
-			WDF_INTERRUPT_CONFIG_INIT(&interruptConfig,
-				DVServerKMDEvtInterruptISR,
-				DVServerKMDEvtInterruptDPC);
+			WDF_INTERRUPT_CONFIG_INIT(&interruptConfig, DVServerKMDEvtInterruptISR, DVServerKMDEvtInterruptDPC);
 
 			//
 			// These first two callbacks will be called at DIRQL. Their job is to
@@ -116,10 +110,8 @@ Return Value:
 			interruptConfig.EvtInterruptEnable = DVServerKMDEvtInterruptEnable;
 			interruptConfig.EvtInterruptDisable = DVServerKMDEvtInterruptDisable;
 
-			status = WdfInterruptCreate(device,
-				&interruptConfig,
-				WDF_NO_OBJECT_ATTRIBUTES,
-				&pDeviceContext->WdfInterrupt);
+			status =
+				WdfInterruptCreate(device, &interruptConfig, WDF_NO_OBJECT_ATTRIBUTES, &pDeviceContext->WdfInterrupt);
 
 			if (!NT_SUCCESS(status)) {
 				ERR("WdfInterruptCreate() call failed!\n");
@@ -131,38 +123,36 @@ Return Value:
 	return status;
 }
 
-NTSTATUS DVServerKMDEvtPrepareHardware(
-	_In_ WDFDEVICE Device,
-	_In_ WDFCMRESLIST ResourcesRaw,
-	_In_ WDFCMRESLIST ResourcesTranslated)
-	/*++
+NTSTATUS DVServerKMDEvtPrepareHardware(_In_ WDFDEVICE Device, _In_ WDFCMRESLIST ResourcesRaw,
+									   _In_ WDFCMRESLIST ResourcesTranslated)
+/*++
 
-	Routine Description:
+Routine Description:
 
-		Performs whatever initialization is needed to setup the device, setting up
-		a DMA channel or mapping any I/O port resources.  This will only be called
-		as a device starts or restarts, not every time the device moves into the D0
-		state.  Consequently, most hardware initialization belongs elsewhere.
+	Performs whatever initialization is needed to setup the device, setting up
+	a DMA channel or mapping any I/O port resources.  This will only be called
+	as a device starts or restarts, not every time the device moves into the D0
+	state.  Consequently, most hardware initialization belongs elsewhere.
 
-	Arguments:
+Arguments:
 
-		Device - A handle to the WDFDEVICE
+	Device - A handle to the WDFDEVICE
 
-		Resources - The raw PnP resources associated with the device.  Most of the
-		time, these aren't useful for a PCI device.
+	Resources - The raw PnP resources associated with the device.  Most of the
+	time, these aren't useful for a PCI device.
 
-		ResourcesTranslated - The translated PnP resources associated with the
-		device.  This is what is important to a PCI device.
+	ResourcesTranslated - The translated PnP resources associated with the
+	device.  This is what is important to a PCI device.
 
-	Return Value:
+Return Value:
 
-		NT status code - failure will result in the device stack being torn down
+	NT status code - failure will result in the device stack being torn down
 
-	--*/
+--*/
 {
 	NTSTATUS status = STATUS_SUCCESS;
 	PDEVICE_CONTEXT pDeviceContext;
-	VioGpuAdapterLite* pVioGpuAdapterLite;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
 	TRACING();
 	pDeviceContext = DeviceGetContext(Device);
 	pDeviceContext->WdfDevice = Device;
@@ -172,12 +162,8 @@ NTSTATUS DVServerKMDEvtPrepareHardware(
 	// Get the BUS_INTERFACE_STANDARD for our device so that we can
 	// read & write to PCI config space.
 	//
-	status = WdfFdoQueryForInterface(Device,
-		&GUID_BUS_INTERFACE_STANDARD,
-		(PINTERFACE)&pDeviceContext->BusInterface,
-		sizeof(BUS_INTERFACE_STANDARD),
-		1,
-		NULL);
+	status = WdfFdoQueryForInterface(Device, &GUID_BUS_INTERFACE_STANDARD, (PINTERFACE)&pDeviceContext->BusInterface,
+									 sizeof(BUS_INTERFACE_STANDARD), 1, NULL);
 
 	if (!NT_SUCCESS(status))
 		return status;
@@ -185,7 +171,7 @@ NTSTATUS DVServerKMDEvtPrepareHardware(
 	//
 	// Retrieve the DVServerKMD device instance
 	//
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	if (!pVioGpuAdapterLite)
 		return STATUS_UNSUCCESSFUL;
@@ -200,29 +186,27 @@ NTSTATUS DVServerKMDEvtPrepareHardware(
 	return status;
 }
 
-NTSTATUS DVServerKMDEvtReleaseHardware(
-	_In_ WDFDEVICE Device,
-	_In_ WDFCMRESLIST ResourcesTranslated)
-	/*++
+NTSTATUS DVServerKMDEvtReleaseHardware(_In_ WDFDEVICE Device, _In_ WDFCMRESLIST ResourcesTranslated)
+/*++
 
-	Routine Description:
+Routine Description:
 
-		Unmap the resources that were mapped in PLxEvtDevicePrepareHardware.
-		This will only be called when the device stopped for resource rebalance,
-		surprise-removed or query-removed.
+	Unmap the resources that were mapped in PLxEvtDevicePrepareHardware.
+	This will only be called when the device stopped for resource rebalance,
+	surprise-removed or query-removed.
 
-	Arguments:
+Arguments:
 
-		Device - A handle to the WDFDEVICE
+	Device - A handle to the WDFDEVICE
 
-		ResourcesTranslated - The translated PnP resources associated with the
-			device.  This is what is important to a PCI device.
+	ResourcesTranslated - The translated PnP resources associated with the
+		device.  This is what is important to a PCI device.
 
-	Return Value:
+Return Value:
 
-		NT status code - failure will result in the device stack being torn down
+	NT status code - failure will result in the device stack being torn down
 
-	--*/
+--*/
 {
 	NTSTATUS status = STATUS_SUCCESS;
 	PDEVICE_CONTEXT pDeviceContext;
@@ -231,47 +215,45 @@ NTSTATUS DVServerKMDEvtReleaseHardware(
 	UNREFERENCED_PARAMETER(ResourcesTranslated);
 
 	pDeviceContext = DeviceGetContext(Device);
-	delete (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	delete (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 	return status;
 }
 
-NTSTATUS DVServerKMDEvtD0Entry(
-	_In_ WDFDEVICE Device,
-	_In_ WDF_POWER_DEVICE_STATE PreviousState)
-	/*++
+NTSTATUS DVServerKMDEvtD0Entry(_In_ WDFDEVICE Device, _In_ WDF_POWER_DEVICE_STATE PreviousState)
+/*++
 
-	Routine Description:
+Routine Description:
 
-		This routine prepares the device for use.  It is called whenever the device
-		enters the D0 state, which happens when the device is started, when it is
-		restarted, and when it has been powered off.
+	This routine prepares the device for use.  It is called whenever the device
+	enters the D0 state, which happens when the device is started, when it is
+	restarted, and when it has been powered off.
 
-		Note that interrupts will not be enabled at the time that this is called.
-		They will be enabled after this callback completes. Added a new callback 
-		DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled, which will ensure 
-		successful enablement of interrupts for subsequent actions.
+	Note that interrupts will not be enabled at the time that this is called.
+	They will be enabled after this callback completes. Added a new callback
+	DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled, which will ensure
+	successful enablement of interrupts for subsequent actions.
 
-		This function is not marked pageable because this function is in the
-		device power up path. When a function is marked pagable and the code
-		section is paged out, it will generate a page fault which could impact
-		the fast resume behavior because the client driver will have to wait
-		until the system drivers can service this page fault.
+	This function is not marked pageable because this function is in the
+	device power up path. When a function is marked pagable and the code
+	section is paged out, it will generate a page fault which could impact
+	the fast resume behavior because the client driver will have to wait
+	until the system drivers can service this page fault.
 
-	Arguments:
+Arguments:
 
-		Device  - The handle to the WDF device object
+	Device  - The handle to the WDF device object
 
-		PreviousState - The state the device was in before this callback was invoked.
+	PreviousState - The state the device was in before this callback was invoked.
 
-	Return Value:
+Return Value:
 
-		NTSTATUS
+	NTSTATUS
 
-		Success implies that the device can be used.
+	Success implies that the device can be used.
 
-		Failure will result in the    device stack being torn down.
+	Failure will result in the    device stack being torn down.
 
-	--*/
+--*/
 {
 	TRACING();
 	NTSTATUS status = STATUS_SUCCESS;
@@ -280,39 +262,37 @@ NTSTATUS DVServerKMDEvtD0Entry(
 	return status;
 }
 
-NTSTATUS DVServerKMDEvtD0Exit(
-	_In_ WDFDEVICE Device,
-	_In_ WDF_POWER_DEVICE_STATE PreviousState)
-	/*++
+NTSTATUS DVServerKMDEvtD0Exit(_In_ WDFDEVICE Device, _In_ WDF_POWER_DEVICE_STATE PreviousState)
+/*++
 
-	Routine Description:
+Routine Description:
 
-		This routine undoes anything done in PLxEvtDeviceD0Entry.  It is called
-		whenever the device leaves the D0 state, which happens when the device
-		is stopped, when it is removed, and when it is powered off.
+	This routine undoes anything done in PLxEvtDeviceD0Entry.  It is called
+	whenever the device leaves the D0 state, which happens when the device
+	is stopped, when it is removed, and when it is powered off.
 
-		The device is still in D0 when this callback is invoked, which means that
-		the driver can still touch hardware in this routine.
+	The device is still in D0 when this callback is invoked, which means that
+	the driver can still touch hardware in this routine.
 
-		Note that interrupts have already been disabled by the time that this
-		callback is invoked.
+	Note that interrupts have already been disabled by the time that this
+	callback is invoked.
 
-	Arguments:
+Arguments:
 
-		Device  - The handle to the WDF device object
+	Device  - The handle to the WDF device object
 
-		TargetState - The state the device will go to when this callback completes.
+	TargetState - The state the device will go to when this callback completes.
 
-	Return Value:
+Return Value:
 
-		Success implies that the device can be used.  Failure will result in the
-		device stack being torn down.
+	Success implies that the device can be used.  Failure will result in the
+	device stack being torn down.
 
-	--*/
+--*/
 {
 	NTSTATUS status = STATUS_SUCCESS;
 	PDEVICE_CONTEXT pDeviceContext;
-	VioGpuAdapterLite* pVioGpuAdapterLite;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
 	TRACING();
 	UNREFERENCED_PARAMETER(PreviousState);
 
@@ -321,7 +301,7 @@ NTSTATUS DVServerKMDEvtD0Exit(
 	//
 	// Retrieve the DVServerKMD device instance
 	//
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	if (!pVioGpuAdapterLite)
 		return STATUS_UNSUCCESSFUL;
@@ -331,43 +311,41 @@ NTSTATUS DVServerKMDEvtD0Exit(
 	return status;
 }
 
-BOOLEAN DVServerKMDEvtInterruptISR(
-	_In_ WDFINTERRUPT Interrupt,
-	_In_ ULONG MessageID)
-	/*++
+BOOLEAN DVServerKMDEvtInterruptISR(_In_ WDFINTERRUPT Interrupt, _In_ ULONG MessageID)
+/*++
 
-		Routine Description:
+	Routine Description:
 
-		Interrupt handler for this driver. Called at DIRQL level when the
-		device or another device sharing the same interrupt line asserts
-		the interrupt. The driver first checks the device to make sure whether
-		this interrupt is generated by its device and if so clear the interrupt
-		register to disable further generation of interrupts and queue a
-		DPC to do other I/O work related to interrupt - such as reading
-		the device memory, starting a DMA transaction, coping it to
-		the request buffer and completing the request, etc.
+	Interrupt handler for this driver. Called at DIRQL level when the
+	device or another device sharing the same interrupt line asserts
+	the interrupt. The driver first checks the device to make sure whether
+	this interrupt is generated by its device and if so clear the interrupt
+	register to disable further generation of interrupts and queue a
+	DPC to do other I/O work related to interrupt - such as reading
+	the device memory, starting a DMA transaction, coping it to
+	the request buffer and completing the request, etc.
 
-	Arguments:
+Arguments:
 
-		Interupt   - Handle to WDFINTERRUPT Object for this device.
-		MessageID  - MSI message ID (always 0 in this configuration)
+	Interupt   - Handle to WDFINTERRUPT Object for this device.
+	MessageID  - MSI message ID (always 0 in this configuration)
 
-	Return Value:
+Return Value:
 
-		TRUE   --  This device generated the interrupt.
-		FALSE  --  This device did not generated this interrupt.
+	TRUE   --  This device generated the interrupt.
+	FALSE  --  This device did not generated this interrupt.
 
-	--*/
+--*/
 {
 	PDEVICE_CONTEXT pDeviceContext;
-	VioGpuAdapterLite* pVioGpuAdapterLite;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
 	TRACING();
 	pDeviceContext = DeviceGetContext(WdfInterruptGetDevice(Interrupt));
 
 	//
 	// Retrieve the DVServerKMD device instance
 	//
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	if (!pVioGpuAdapterLite)
 		return FALSE;
@@ -377,31 +355,29 @@ BOOLEAN DVServerKMDEvtInterruptISR(
 	return TRUE;
 }
 
-void DVServerKMDEvtInterruptDPC(
-	_In_ WDFINTERRUPT Interrupt,
-	_In_ WDFOBJECT AssociatedObject)
-	/*++
-
-		Routine Description:
+void DVServerKMDEvtInterruptDPC(_In_ WDFINTERRUPT Interrupt, _In_ WDFOBJECT AssociatedObject)
+/*++
 
 	Routine Description:
 
-		DPC callback for ISR. Please note that on a multiprocessor system,
-		you could have more than one DPCs running simulataneously on
-		multiple processors. So if you are accesing any global resources
-		make sure to synchrnonize the accesses with a spinlock.
+Routine Description:
 
-	Arguments:
+	DPC callback for ISR. Please note that on a multiprocessor system,
+	you could have more than one DPCs running simulataneously on
+	multiple processors. So if you are accesing any global resources
+	make sure to synchrnonize the accesses with a spinlock.
 
-		Interupt  - Handle to WDFINTERRUPT Object for this device.
-		Device    - WDFDEVICE object passed to InterruptCreate
+Arguments:
 
-	Return Value:
+	Interupt  - Handle to WDFINTERRUPT Object for this device.
+	Device    - WDFDEVICE object passed to InterruptCreate
 
-	--*/
+Return Value:
+
+--*/
 {
 	PDEVICE_CONTEXT pDeviceContext;
-	VioGpuAdapterLite* pVioGpuAdapterLite;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
 	TRACING();
 	UNREFERENCED_PARAMETER(AssociatedObject);
 
@@ -410,7 +386,7 @@ void DVServerKMDEvtInterruptDPC(
 	//
 	// Retrieve the DVServerKMD device instance
 	//
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	if (!pVioGpuAdapterLite)
 		return;
@@ -419,10 +395,7 @@ void DVServerKMDEvtInterruptDPC(
 }
 
 NTSTATUS
-DVServerKMDEvtDeviceD0ExitPreInterruptsDisabled(
-	IN WDFDEVICE Device,
-	IN WDF_POWER_DEVICE_STATE TargetState
-)
+DVServerKMDEvtDeviceD0ExitPreInterruptsDisabled(IN WDFDEVICE Device, IN WDF_POWER_DEVICE_STATE TargetState)
 /*++
 
 Routine Description:
@@ -449,8 +422,8 @@ Return Value:
 
 	PDEVICE_CONTEXT pDeviceContext;
 	pDeviceContext = DeviceGetContext(Device);
-	VioGpuAdapterLite* pVioGpuAdapterLite;
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	pVioGpuAdapterLite->DestroyFrameBufferCursorObjExt();
 
@@ -458,10 +431,7 @@ Return Value:
 }
 
 NTSTATUS
-DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled(
-	IN WDFDEVICE Device,
-	IN WDF_POWER_DEVICE_STATE PreviousState
-)
+DVServerKMDEvtDeviceD0EntryPostInterruptsEnabled(IN WDFDEVICE Device, IN WDF_POWER_DEVICE_STATE PreviousState)
 /*++
 
 Routine Description:
@@ -487,12 +457,12 @@ Return Value:
 	NTSTATUS status = STATUS_SUCCESS;
 
 	PDEVICE_CONTEXT pDeviceContext;
-	VioGpuAdapterLite* pVioGpuAdapterLite;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
 	pDeviceContext = DeviceGetContext(Device);
 	//
 	// Retrieve the DVServerKMD device instance
 	//
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	if (!pVioGpuAdapterLite)
 		return STATUS_UNSUCCESSFUL;
@@ -501,10 +471,7 @@ Return Value:
 	return status;
 }
 
-NTSTATUS DVServerKMDEvtInterruptEnable(
-	IN WDFINTERRUPT  Interrupt,
-	IN WDFDEVICE     AssociatedDevice
-)
+NTSTATUS DVServerKMDEvtInterruptEnable(IN WDFINTERRUPT Interrupt, IN WDFDEVICE AssociatedDevice)
 /*++
 
 Routine Description:
@@ -534,10 +501,7 @@ Return Value:
 	return STATUS_SUCCESS;
 }
 
-NTSTATUS DVServerKMDEvtInterruptDisable(
-	IN WDFINTERRUPT  Interrupt,
-	IN WDFDEVICE     AssociatedDevice
-)
+NTSTATUS DVServerKMDEvtInterruptDisable(IN WDFINTERRUPT Interrupt, IN WDFDEVICE AssociatedDevice)
 /*++
 
 Routine Description:
@@ -565,11 +529,10 @@ Return Value:
 
 	PDEVICE_CONTEXT pDeviceContext;
 	pDeviceContext = DeviceGetContext(WdfInterruptGetDevice(Interrupt));
-	VioGpuAdapterLite* pVioGpuAdapterLite;
-	pVioGpuAdapterLite = (VioGpuAdapterLite*)pDeviceContext->pvDeviceExtension;
+	VioGpuAdapterLite *pVioGpuAdapterLite;
+	pVioGpuAdapterLite = (VioGpuAdapterLite *)pDeviceContext->pvDeviceExtension;
 
 	pVioGpuAdapterLite->DisableInterruptExt();
 
 	return STATUS_SUCCESS;
 }
-

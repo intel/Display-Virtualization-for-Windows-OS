@@ -12,21 +12,22 @@
 #include "dvinstaller.tmh"
 
 /*******************************************************************************
-*
-* Description
-*
-* dvUninstallKmdUmdAndRemoveOemInfFile - uninstalls both KMD and UMD driver
-*
-* Parameters
-*   deviceDesc - Device description of the Parent(KMD) driver.
-*   kmdInfFilename - KMD driver's OEM INF file name from driver store.
-*   umdInfFilename - UMD driver's OEM INF file name from driver store.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-*******************************************************************************/
-int  dvUninstallKmdUmdAndRemoveOemInfFile(const wchar_t* deviceDesc, WCHAR* infFullPathKmd, WCHAR* infFullPathUmd) {
+ *
+ * Description
+ *
+ * dvUninstallKmdUmdAndRemoveOemInfFile - uninstalls both KMD and UMD driver
+ *
+ * Parameters
+ *   deviceDesc - Device description of the Parent(KMD) driver.
+ *   kmdInfFilename - KMD driver's OEM INF file name from driver store.
+ *   umdInfFilename - UMD driver's OEM INF file name from driver store.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ *******************************************************************************/
+int dvUninstallKmdUmdAndRemoveOemInfFile(const wchar_t *deviceDesc, WCHAR *infFullPathKmd, WCHAR *infFullPathUmd)
+{
 
 	int result = EXIT_FAIL;
 	DWORD index = 0, size = 0;
@@ -48,8 +49,8 @@ int  dvUninstallKmdUmdAndRemoveOemInfFile(const wchar_t* deviceDesc, WCHAR* infF
 	devInfo.cbSize = sizeof(SP_DEVINFO_DATA);
 	for (index = 0; SetupDiEnumDeviceInfo(devInfoSet, index, &devInfo); index++) {
 		// Build a list of driver info items
-		if (!SetupDiGetDeviceRegistryProperty(
-			devInfoSet, &devInfo, SPDRP_DEVICEDESC, NULL, (PBYTE)deviceName, sizeof(deviceName), &size)) {
+		if (!SetupDiGetDeviceRegistryProperty(devInfoSet, &devInfo, SPDRP_DEVICEDESC, NULL, (PBYTE)deviceName,
+											  sizeof(deviceName), &size)) {
 			continue;
 		}
 		if (wcsstr(deviceName, deviceDesc)) {
@@ -62,22 +63,18 @@ int  dvUninstallKmdUmdAndRemoveOemInfFile(const wchar_t* deviceDesc, WCHAR* infF
 						if (!SetupUninstallOEMInf(infFullPathUmd, SUOI_FORCEDELETE, NULL)) {
 							ERR("\nUMD device INF remove failed");
 							result = EXIT_UMD_INF_REMOVAL_FAILED;
-						}
-						else {
+						} else {
 							DBGPRINT("\nUMD device INF removed");
 						}
 					}
-				}
-				else {
+				} else {
 					ERR("\nKMD device INF remove failed");
 					result = EXIT_KMD_INF_REMOVAL_FAILED;
 				}
-			}
-			else {
+			} else {
 				if (GetLastError() == ERROR_INF_IN_USE_BY_DEVICES) {
 					ERR("\nDV driver is in use, can not de deleted\n");
-				}
-				else {
+				} else {
 					ERR("\nerror code %x\n", GetLastError());
 				}
 				ERR("KMD device remove failed\n");
@@ -90,19 +87,19 @@ int  dvUninstallKmdUmdAndRemoveOemInfFile(const wchar_t* deviceDesc, WCHAR* infF
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvUninstallKmdAndUmd - uninstalls the DV driver from the driver store through OEM INF
-*               file.
-*
-* Parameters
-*   unInstallUmd - Specify if child driver INF also to be removed.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-*******************************************************************************/
+ *
+ * Description
+ *
+ * dvUninstallKmdAndUmd - uninstalls the DV driver from the driver store through OEM INF
+ *               file.
+ *
+ * Parameters
+ *   unInstallUmd - Specify if child driver INF also to be removed.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ *******************************************************************************/
 BOOL dvUninstallKmdAndUmd(BOOL unInstallUmd)
 {
 	int result = EXIT_FAIL;
@@ -110,24 +107,25 @@ BOOL dvUninstallKmdAndUmd(BOOL unInstallUmd)
 	WCHAR infFullPathkmd[MAX_PATH];
 
 	TRACING();
-	//device scan after uninstall
+	// device scan after uninstall
 	if (!dvDeviceScan()) {
 		ERR("\nKMD/UMD device scan failed");
 	}
 	if (unInstallUmd) {
-		//Get UMD inf file name
+		// Get UMD inf file name
 		if (!dvGetInstalledOemInfFileName(DVSERVERUMD_DESC, infFullPathumd)) {
 			ERR("\nUMD device INF not found");
 			return FALSE;
 		}
 	}
-	//Get KMD inf file name
+	// Get KMD inf file name
 	if (!dvGetInstalledOemInfFileName(DVSERVERKMD_DESC, infFullPathkmd)) {
 		ERR("\nKMD device INF not found");
 		return FALSE;
 	}
-	//Remove kmd and it's child device and later remove the OEM inf file name from the device store
-	result = dvUninstallKmdUmdAndRemoveOemInfFile(DVSERVERKMD_DESC, infFullPathkmd, ((unInstallUmd == TRUE) ? infFullPathumd : NULL));
+	// Remove kmd and it's child device and later remove the OEM inf file name from the device store
+	result = dvUninstallKmdUmdAndRemoveOemInfFile(DVSERVERKMD_DESC, infFullPathkmd,
+												  ((unInstallUmd == TRUE) ? infFullPathumd : NULL));
 	if (result != EXIT_OK) {
 
 		ERR("\nKMD/UMD device and driver removal failed %d", result);
@@ -138,20 +136,20 @@ BOOL dvUninstallKmdAndUmd(BOOL unInstallUmd)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvUninstall - uninstalls the DV driver from the driver store through OEM INF
-*               file.
-*
-* Parameters
-*   infFullPath - OEM INF file from drive store with full path.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-*******************************************************************************/
-int dvUninstall(WCHAR* infFullPath)
+ *
+ * Description
+ *
+ * dvUninstall - uninstalls the DV driver from the driver store through OEM INF
+ *               file.
+ *
+ * Parameters
+ *   infFullPath - OEM INF file from drive store with full path.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ *******************************************************************************/
+int dvUninstall(WCHAR *infFullPath)
 {
 	HMODULE newdevMod = NULL;
 	BOOL reboot = TRUE;
@@ -169,15 +167,12 @@ int dvUninstall(WCHAR* infFullPath)
 		if (!suoiFn(NULL, infFullPath, 0, &reboot)) {
 			if (GetLastError() == ERROR_INF_IN_USE_BY_DEVICES) {
 				ERR("\nDV driver is in use, can not de deleted\n");
-			}
-			else if (GetLastError() == ERROR_NOT_AN_INSTALLED_OEM_INF) {
+			} else if (GetLastError() == ERROR_NOT_AN_INSTALLED_OEM_INF) {
 				ERR("\nDV driver is not installed, can not delete\n");
-			}
-			else {
+			} else {
 				ERR("\nfailed to delete for reason = (%d) \n", GetLastError());
 			}
-		}
-		else {
+		} else {
 			DBGPRINT("dv Driver uninstalled Successfully");
 			failcode = EXIT_OK;
 		}
@@ -192,19 +187,19 @@ int dvUninstall(WCHAR* infFullPath)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvInstall - Function installs/updates the driver based on inputs.
-*
-* Parameters
-*   installMode - Driver is installed or updated based on the installMode.
-*   dvInstallUmd - Specifies if DVServerUMD or DVServerKMD inf to be choosen
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvInstall - Function installs/updates the driver based on inputs.
+ *
+ * Parameters
+ *   installMode - Driver is installed or updated based on the installMode.
+ *   dvInstallUmd - Specifies if DVServerUMD or DVServerKMD inf to be choosen
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ ******************************************************************************/
 int dvInstall(InstallModes installMode, int dvInstallUmd)
 {
 	HMODULE newdevMod = NULL;
@@ -230,7 +225,7 @@ int dvInstall(InstallModes installMode, int dvInstallUmd)
 		ERR("Failed to load NewdevLib");
 		return EXIT_FAIL;
 	}
-	//device scan before install
+	// device scan before install
 	if (!dvDeviceScan()) {
 		goto final;
 	}
@@ -271,17 +266,15 @@ int dvInstall(InstallModes installMode, int dvInstallUmd)
 		if (dvInstallUmd) {
 			DBGPRINT("UMD driver install done in dvPostInstall");
 			failcode = EXIT_OK;
-		}
-		else {
+		} else {
 			if (dvPostInstall()) {
 				ERR("failed in dvPostInstall");
-			}
-			else {
+			} else {
 				failcode = EXIT_OK;
 			}
 		}
 	}
-	final :
+final:
 	if (dvLoadUnloadNewdevLib(&newdevMod, FALSE)) {
 		ERR("Failed to unload NewdevLib");
 		return EXIT_FAIL;

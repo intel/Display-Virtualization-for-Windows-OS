@@ -9,32 +9,26 @@
 ;-----------------------------------------------------------------------------*/
 #pragma once
 
-#define WPP_CONTROL_GUIDS WPP_DEFINE_CONTROL_GUID(DVEnablerGuid, (3ABD0A19, 3767, 47FA, A2C0, EAB7977BAC78), \
-									 WPP_DEFINE_BIT(verbose) \
-									 WPP_DEFINE_BIT(information) \
-									 WPP_DEFINE_BIT(error) \
-									 WPP_DEFINE_BIT(ftrace) \
-									 WPP_DEFINE_BIT(warning))
+#define WPP_CONTROL_GUIDS                                                                                              \
+	WPP_DEFINE_CONTROL_GUID(DVEnablerGuid, (3ABD0A19, 3767, 47FA, A2C0, EAB7977BAC78),                                 \
+							WPP_DEFINE_BIT(verbose) WPP_DEFINE_BIT(information) WPP_DEFINE_BIT(error)                  \
+								WPP_DEFINE_BIT(ftrace) WPP_DEFINE_BIT(warning))
 
-#define WPP_FLAG_LEVEL_LOGGER(flag, level)                             \
-    WPP_LEVEL_LOGGER(flag)
+#define WPP_FLAG_LEVEL_LOGGER(flag, level) WPP_LEVEL_LOGGER(flag)
 
-#define WPP_FLAG_LEVEL_ENABLED(flag, level)                            \
-    (WPP_LEVEL_ENABLED(flag) &&                                        \
-     WPP_CONTROL(WPP_BIT_ ## flag).Level >= level)
+#define WPP_FLAG_LEVEL_ENABLED(flag, level) (WPP_LEVEL_ENABLED(flag) && WPP_CONTROL(WPP_BIT_##flag).Level >= level)
 
-#define WPP_LEVEL_FLAGS_LOGGER(lvl,flags)                              \
-           WPP_LEVEL_LOGGER(flags)
+#define WPP_LEVEL_FLAGS_LOGGER(lvl, flags) WPP_LEVEL_LOGGER(flags)
 
-#define WPP_LEVEL_FLAGS_ENABLED(lvl, flags)                            \
-           (WPP_LEVEL_ENABLED(flags) && WPP_CONTROL(WPP_BIT_ ## flags).Level >= lvl)
+#define WPP_LEVEL_FLAGS_ENABLED(lvl, flags) (WPP_LEVEL_ENABLED(flags) && WPP_CONTROL(WPP_BIT_##flags).Level >= lvl)
 
-
-class tracer {
+class tracer
+{
 private:
-	char* m_func_name;
+	char *m_func_name;
+
 public:
-	tracer(const char* func_name);
+	tracer(const char *func_name);
 	~tracer();
 };
 #define TRACING() tracer trace(__FUNCTION__)
@@ -56,4 +50,3 @@ public:
 // USEPREFIX(DBGPRINT, "%!STDPREFIX! [%!FUNC!:%!LINE!] [DBG] \t");
 // USEPREFIX(INFO, "%!STDPREFIX! [%!FUNC!:%!LINE!] [INFO] \t");
 // end_wpp
-

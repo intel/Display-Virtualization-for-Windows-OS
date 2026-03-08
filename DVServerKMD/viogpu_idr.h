@@ -37,10 +37,12 @@ public:
 	BOOLEAN Init(_In_ ULONG start);
 	ULONG GetId(VOID);
 	VOID PutId(_In_ ULONG id);
+
 private:
 	VOID Close(VOID);
 	VOID Lock(VOID);
 	VOID Unlock(VOID);
+
 private:
 	ULONG m_uStartIndex;
 	RTL_BITMAP m_IdBitMap;

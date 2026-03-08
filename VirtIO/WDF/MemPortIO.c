@@ -45,42 +45,24 @@
 #define _VOLATILE
 #endif
 
-#define READ_PORT_OR_REGISTER(address, width)                       \
-    (address & ~PORT_MASK) ?                                        \
-        READ_REGISTER_##width((_VOLATILE width *)address) :         \
-        READ_PORT_##width((width *)address)
+#define READ_PORT_OR_REGISTER(address, width)                                                                          \
+	(address & ~PORT_MASK) ? READ_REGISTER_##width((_VOLATILE width *)address) : READ_PORT_##width((width *)address)
 
-#define WRITE_PORT_OR_REGISTER(address, width, value)               \
-    (address & ~PORT_MASK) ?                                        \
-        WRITE_REGISTER_##width((_VOLATILE width *)address, value) : \
-        WRITE_PORT_##width((width *)address, value)
+#define WRITE_PORT_OR_REGISTER(address, width, value)                                                                  \
+	(address & ~PORT_MASK) ? WRITE_REGISTER_##width((_VOLATILE width *)address, value)                                 \
+						   : WRITE_PORT_##width((width *)address, value)
 
-u8 ReadVirtIODeviceByte(ULONG_PTR ulRegister)
-{
-    return READ_PORT_OR_REGISTER(ulRegister, UCHAR);
-}
+u8 ReadVirtIODeviceByte(ULONG_PTR ulRegister) { return READ_PORT_OR_REGISTER(ulRegister, UCHAR); }
 
-void WriteVirtIODeviceByte(ULONG_PTR ulRegister, u8 bValue)
-{
-    WRITE_PORT_OR_REGISTER(ulRegister, UCHAR, bValue);
-}
+void WriteVirtIODeviceByte(ULONG_PTR ulRegister, u8 bValue) { WRITE_PORT_OR_REGISTER(ulRegister, UCHAR, bValue); }
 
-u16 ReadVirtIODeviceWord(ULONG_PTR ulRegister)
-{
-    return READ_PORT_OR_REGISTER(ulRegister, USHORT);
-}
+u16 ReadVirtIODeviceWord(ULONG_PTR ulRegister) { return READ_PORT_OR_REGISTER(ulRegister, USHORT); }
 
-void WriteVirtIODeviceWord(ULONG_PTR ulRegister, u16 wValue)
-{
-    WRITE_PORT_OR_REGISTER(ulRegister, USHORT, wValue);
-}
+void WriteVirtIODeviceWord(ULONG_PTR ulRegister, u16 wValue) { WRITE_PORT_OR_REGISTER(ulRegister, USHORT, wValue); }
 
-u32 ReadVirtIODeviceRegister(ULONG_PTR ulRegister)
-{
-    return READ_PORT_OR_REGISTER(ulRegister, ULONG);
-}
+u32 ReadVirtIODeviceRegister(ULONG_PTR ulRegister) { return READ_PORT_OR_REGISTER(ulRegister, ULONG); }
 
 void WriteVirtIODeviceRegister(ULONG_PTR ulRegister, u32 ulValue)
 {
-    WRITE_PORT_OR_REGISTER(ulRegister, ULONG, ulValue);
+	WRITE_PORT_OR_REGISTER(ulRegister, ULONG, ulValue);
 }

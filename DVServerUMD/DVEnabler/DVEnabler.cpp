@@ -8,14 +8,12 @@
 ;   This file will disable MSFT Display Path (MBDA)
 ;--------------------------------------------------------------------------*/
 
-
 #include "pch.h"
 #include "Trace.h"
 #include "DVEnabler.tmh"
 #include <Windows.h>
 #include <stdio.h>
 #include <string.h>
-
 
 int dvenabler_init()
 {
@@ -30,16 +28,16 @@ int dvenabler_init()
 	int status;
 	unsigned int path_count = NULL, mode_count = NULL;
 	bool found_id_path = FALSE, found_non_id_path = FALSE;
-	disp_info dinfo = { 0 };
+	disp_info dinfo = {0};
 	/* Initializing the baseType.baseOutputTechnology to default OS value(failcase) */
 	baseType.baseOutputTechnology = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_OTHER;
 
-	//Create Security Descriptor for HOTPLUG_EVENT, To allow the DVServerUMD to access the event
+	// Create Security Descriptor for HOTPLUG_EVENT, To allow the DVServerUMD to access the event
 	PSECURITY_DESCRIPTOR hp_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
 	InitializeSecurityDescriptor(hp_psd, SECURITY_DESCRIPTOR_REVISION);
 	SetSecurityDescriptorDacl(hp_psd, TRUE, NULL, FALSE);
 
-	SECURITY_ATTRIBUTES hp_sa = { 0 };
+	SECURITY_ATTRIBUTES hp_sa = {0};
 	hp_sa.nLength = sizeof(hp_sa);
 	hp_sa.lpSecurityDescriptor = hp_psd;
 	hp_sa.bInheritHandle = FALSE;
@@ -50,12 +48,12 @@ int dvenabler_init()
 		return DVENABLER_FAILURE;
 	}
 
-	//Create Security Descriptor for DVE_EVENT, To allow the DVServerUMD to access the event
+	// Create Security Descriptor for DVE_EVENT, To allow the DVServerUMD to access the event
 	PSECURITY_DESCRIPTOR dve_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
 	InitializeSecurityDescriptor(dve_psd, SECURITY_DESCRIPTOR_REVISION);
 	SetSecurityDescriptorDacl(dve_psd, TRUE, NULL, FALSE);
 
-	SECURITY_ATTRIBUTES dve_sa = { 0 };
+	SECURITY_ATTRIBUTES dve_sa = {0};
 	dve_sa.nLength = sizeof(dve_sa);
 	dve_sa.lpSecurityDescriptor = dve_psd;
 	dve_sa.bInheritHandle = FALSE;
@@ -67,21 +65,20 @@ int dvenabler_init()
 		return DVENABLER_FAILURE;
 	}
 
-	while (1)
-	{
+	while (1) {
 		if (IsSystemLocked()) {
 			DBGPRINT("System is in locked state, so wait untill system gets unlocked");
 			continue;
 		}
 
-		//Reset the flags before doing QDC
+		// Reset the flags before doing QDC
 		path_count = NULL, mode_count = NULL;
 		found_id_path = FALSE, found_non_id_path = FALSE;
 
 		/* Step 0: Get the size of buffers w.r.t active paths and modes, required for QueryDisplayConfig */
 		if (GetDisplayConfigBufferSizes(QDC_ONLY_ACTIVE_PATHS, &path_count, &mode_count) != ERROR_SUCCESS) {
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+						   err, 255, NULL);
 			ERR("GetDisplayConfigBufferSizes failed with %s. Exiting!!!\n", err);
 			continue;
 		}
@@ -90,27 +87,29 @@ int dvenabler_init()
 		std::vector<DISPLAYCONFIG_PATH_INFO> path_list(path_count);
 		std::vector<DISPLAYCONFIG_MODE_INFO> mode_list(mode_count);
 
-		//Get the Display info shared from DVServerUMD
+		// Get the Display info shared from DVServerUMD
 		if (GetDisplayCount(&dinfo) == DVENABLER_FAILURE) {
 			ERR("shared mem read failed");
 			goto end;
 		}
 
 		/* Step 1: Retrieve information about all possible display paths for all display devices */
-		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, path_list.data(), &mode_count, mode_list.data(), nullptr) != ERROR_SUCCESS) {
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		if (QueryDisplayConfig(QDC_ONLY_ACTIVE_PATHS, &path_count, path_list.data(), &mode_count, mode_list.data(),
+							   nullptr) != ERROR_SUCCESS) {
+			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+						   err, 255, NULL);
 			ERR("QueryDisplayConfig failed with %s. Exiting!!!\n", err);
 			continue;
 		}
 
-		for (auto& activepath_loopindex : path_list) {
+		for (auto &activepath_loopindex : path_list) {
 			baseType.header.type = DISPLAYCONFIG_DEVICE_INFO_GET_TARGET_BASE_TYPE;
 			baseType.header.size = sizeof(baseType);
 			baseType.header.adapterId = activepath_loopindex.sourceInfo.adapterId;
 			baseType.header.id = activepath_loopindex.targetInfo.id;
 
-			/* Step 2 : DisplayConfigGetDeviceInfo function retrieves display configuration information about the device */
+			/* Step 2 : DisplayConfigGetDeviceInfo function retrieves display configuration information about the device
+			 */
 			if (DisplayConfigGetDeviceInfo(&baseType.header) != ERROR_SUCCESS) {
 				ERR("DisplayConfigGetDeviceInfo failed... Continuing with other active paths!!!\n");
 				continue;
@@ -118,22 +117,24 @@ int dvenabler_init()
 
 			DBGPRINT("baseType.baseOutputTechnology = %d\n", baseType.baseOutputTechnology);
 			if (!(found_non_id_path && found_id_path)) {
-				/* Step 3: Check for the "outputTechnology" it should be "DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED" for
-						   IDD path ONLY, In case of MSFT display we need to disable the active display path  */
+				/* Step 3: Check for the "outputTechnology" it should be
+				   "DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED" for IDD path ONLY, In case of MSFT display we need
+				   to disable the active display path  */
 				if (baseType.baseOutputTechnology != DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED) {
 
 					/* Step 4: Clear the DISPLAYCONFIG_PATH_INFO.flags for MSFT path*/
 					activepath_loopindex.flags = 0;
 					DBGPRINT("Clearing Microsoft activepath_loopindex.flags.\n");
 					found_non_id_path = true;
-				}
-				else {
-					/* Move the IDD source co-ordinates to (0,0)  if MSBDA monitor is listed as first monitor in the path list*/
+				} else {
+					/* Move the IDD source co-ordinates to (0,0)  if MSBDA monitor is listed as first monitor in the
+					 * path list*/
 					if (found_non_id_path && !found_id_path) {
 						mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x = 0;
 						mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y = 0;
-						DBGPRINT("x, y  = %dX%x\n", mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x,
-							mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y);
+						DBGPRINT("x, y  = %dX%x\n",
+								 mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.x,
+								 mode_list[activepath_loopindex.sourceInfo.modeInfoIdx].sourceMode.position.y);
 					}
 					found_id_path = true;
 				}
@@ -144,8 +145,7 @@ int dvenabler_init()
 			(!found_non_id_path && (path_count != static_cast<unsigned int>(dinfo.disp_count)))) {
 			if (found_non_id_path) {
 				DBGPRINT("MSFT display is present. Path count not updated, so loop again");
-			}
-			else {
+			} else {
 				DBGPRINT("MSFT display is not present. Path count not updated, so loop again");
 			}
 			DBGPRINT("disp_count = %d, path count = %d", dinfo.disp_count, path_count);
@@ -155,37 +155,36 @@ int dvenabler_init()
 		if (found_non_id_path && found_id_path) {
 			/* Step 5: SetDisplayConfig modifies the display topology by exclusively enabling/disabling the specified
 					   paths in the current session. */
-			if (SetDisplayConfig(path_count, path_list.data(), mode_count, mode_list.data(), \
-				SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE) != ERROR_SUCCESS) {
+			if (SetDisplayConfig(path_count, path_list.data(), mode_count, mode_list.data(),
+								 SDC_APPLY | SDC_USE_SUPPLIED_DISPLAY_CONFIG | SDC_SAVE_TO_DATABASE) != ERROR_SUCCESS) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 				ERR("SetDisplayConfig failed with %s\n", err);
 				continue;
 			}
-		}
-		else {
-			DBGPRINT("Skipping SetDisplayConfig as did not find ID and non-ID path. found_non_id_path = %d, found_id_path = %d\n",
-				found_non_id_path, found_id_path);
+		} else {
+			DBGPRINT("Skipping SetDisplayConfig as did not find ID and non-ID path. found_non_id_path = %d, "
+					 "found_id_path = %d\n",
+					 found_non_id_path, found_id_path);
 		}
 
 		/*If there is any display config change at the time of reboot / shutdown.
-		At this stage, Since the Dvenabler is not running, Changed display config will not be saved in windows persistence,
-		So at this case MSFT path will be enabled and since the DV enabler starts only after user login
-		The login page  will have blank screen after boot, untill we enter the password.
-		To over come this blank out issue...In UMD always we will always boot with single display config
-		After login, Dvenabler will set the below event to enable the HPD path
-		Once this event is set our DVserver UMD driver will enable the Hot plug path and get the display status from KMD
-		So this event is Set once after every boot to enable the HPD path in our DVServer UMD driver */
+		At this stage, Since the Dvenabler is not running, Changed display config will not be saved in windows
+		persistence, So at this case MSFT path will be enabled and since the DV enabler starts only after user login The
+		login page  will have blank screen after boot, untill we enter the password. To over come this blank out
+		issue...In UMD always we will always boot with single display config After login, Dvenabler will set the below
+		event to enable the HPD path Once this event is set our DVserver UMD driver will enable the Hot plug path and
+		get the display status from KMD So this event is Set once after every boot to enable the HPD path in our
+		DVServer UMD driver */
 		status = SetEvent(hp_event);
 		if (status == NULL) {
 			ERR(" Set HPevent failed with error [%d]\n ", GetLastError());
 			continue;
 		}
 
-		end:
-		//wait for arraival or departure call from UMD
+	end:
+		// wait for arraival or departure call from UMD
 		WaitForSingleObject(dve_event, INFINITE);
-
 	}
 	WPP_CLEANUP();
 	CloseHandle(hp_event);
@@ -194,7 +193,8 @@ int dvenabler_init()
 	return 0;
 }
 
-int GetDisplayCount(disp_info* pdinfo) {
+int GetDisplayCount(disp_info *pdinfo)
+{
 
 	// Open the existing shared memory section by its name
 	HANDLE hSharedMem = OpenFileMapping(FILE_MAP_READ, FALSE, DISP_INFO);
@@ -205,12 +205,12 @@ int GetDisplayCount(disp_info* pdinfo) {
 	}
 
 	// Map the shared memory into the process's address space
-	struct disp_info* pSharedMem = (struct disp_info*)MapViewOfFile(
-		hSharedMem,          // Handle to the shared memory section
-		FILE_MAP_READ,       // Read access
-		0,                   // File offset - high-order DWORD
-		0,                   // File offset - low-order DWORD
-		0);                  // Mapping size (0 means to map the entire section)
+	struct disp_info *pSharedMem =
+		(struct disp_info *)MapViewOfFile(hSharedMem,	 // Handle to the shared memory section
+										  FILE_MAP_READ, // Read access
+										  0,			 // File offset - high-order DWORD
+										  0,			 // File offset - low-order DWORD
+										  0);			 // Mapping size (0 means to map the entire section)
 
 	if (pSharedMem == NULL) {
 		ERR(L"Failed to map view of shared memory section (%d)\n", GetLastError());
@@ -226,32 +226,32 @@ int GetDisplayCount(disp_info* pdinfo) {
 	CloseHandle(hSharedMem);
 
 	return DVENABLER_SUCCESS;
-
 }
 
-
 /*******************************************************************************
-*
-* Description
-*
-* IsSystemLocked - This function is used to check if the system is in locked
-* or unlocked state.
-*
-* Parameters
-* Null
-*
-* Return val
-* int - 0 = Unlocked, -1 = ERROR, 1 = Locked
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * IsSystemLocked - This function is used to check if the system is in locked
+ * or unlocked state.
+ *
+ * Parameters
+ * Null
+ *
+ * Return val
+ * int - 0 = Unlocked, -1 = ERROR, 1 = Locked
+ *
+ ******************************************************************************/
 
-int IsSystemLocked() {
-	FILE* fp;
+int IsSystemLocked()
+{
+	FILE *fp;
 	char buffer[128];
 	int status = TRUE;
 
 	// Run the PowerShell command to get the system lock status
-	fp = _popen("powershell.exe -WindowStyle Hidden -Command \"(quser 2>$null) -and (get-process logonui -ea 0)\"", "r");
+	fp =
+		_popen("powershell.exe -WindowStyle Hidden -Command \"(quser 2>$null) -and (get-process logonui -ea 0)\"", "r");
 	if (fp == NULL) {
 		ERR("Failed to run PowerShell command.\n");
 		return DVENABLER_FAILURE;
@@ -263,12 +263,10 @@ int IsSystemLocked() {
 		if (strstr(buffer, "True") != NULL) {
 			DBGPRINT("System is locked\n");
 			status = TRUE;
-		}
-		else if (strstr(buffer, "False") != NULL) {
+		} else if (strstr(buffer, "False") != NULL) {
 			DBGPRINT("System is unlocked\n");
 			status = FALSE;
-		}
-		else {
+		} else {
 			ERR("Unexpected output\n");
 			status = DVENABLER_FAILURE;
 		}

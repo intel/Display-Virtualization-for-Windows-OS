@@ -19,7 +19,7 @@ Environment:
 #include <Driver.tmh>
 extern "C" {
 #include "kdebugprint.h"
-	tDebugPrintFunc VirtioDebugPrintProc;
+tDebugPrintFunc VirtioDebugPrintProc;
 }
 
 int nDebugLevel;
@@ -29,23 +29,18 @@ int bBreakAlways;
 char module_name[80] = "KMD";
 
 #ifdef ALLOC_PRAGMA
-#pragma alloc_text (INIT, DriverEntry)
-#pragma alloc_text (PAGE, DVServerKMDEvtDeviceAdd)
-#pragma alloc_text (PAGE, DVServerKMDEvtDriverContextCleanup)
-#pragma alloc_text (PAGE, DVServerKMDEvtPrepareHardware)
-#pragma alloc_text (PAGE, DVServerKMDEvtReleaseHardware)
-#pragma alloc_text (PAGE, DVServerKMDEvtD0Entry)
-#pragma alloc_text (PAGE, DVServerKMDEvtD0Exit)
-#pragma alloc_text (PAGE, DVServerKMDEvtDriverUnload)
+#pragma alloc_text(INIT, DriverEntry)
+#pragma alloc_text(PAGE, DVServerKMDEvtDeviceAdd)
+#pragma alloc_text(PAGE, DVServerKMDEvtDriverContextCleanup)
+#pragma alloc_text(PAGE, DVServerKMDEvtPrepareHardware)
+#pragma alloc_text(PAGE, DVServerKMDEvtReleaseHardware)
+#pragma alloc_text(PAGE, DVServerKMDEvtD0Entry)
+#pragma alloc_text(PAGE, DVServerKMDEvtD0Exit)
+#pragma alloc_text(PAGE, DVServerKMDEvtDriverUnload)
 #endif
 
-
-
 NTSTATUS
-DriverEntry(
-	_In_ PDRIVER_OBJECT  DriverObject,
-	_In_ PUNICODE_STRING RegistryPath
-)
+DriverEntry(_In_ PDRIVER_OBJECT DriverObject, _In_ PUNICODE_STRING RegistryPath)
 /*++
 
 Routine Description:
@@ -89,16 +84,9 @@ Return Value:
 	WPP_INIT_TRACING(DriverObject, RegistryPath);
 	TRACING();
 
-	WDF_DRIVER_CONFIG_INIT(&config,
-		DVServerKMDEvtDeviceAdd
-	);
+	WDF_DRIVER_CONFIG_INIT(&config, DVServerKMDEvtDeviceAdd);
 	config.EvtDriverUnload = DVServerKMDEvtDriverUnload;
-	status = WdfDriverCreate(DriverObject,
-		RegistryPath,
-		&attributes,
-		&config,
-		WDF_NO_HANDLE
-	);
+	status = WdfDriverCreate(DriverObject, RegistryPath, &attributes, &config, WDF_NO_HANDLE);
 
 	if (!NT_SUCCESS(status)) {
 		WPP_CLEANUP(DriverObject);
@@ -108,10 +96,7 @@ Return Value:
 	return status;
 }
 
-VOID
-DVServerKMDEvtDriverUnload(
-	_In_ WDFDRIVER driver
-)
+VOID DVServerKMDEvtDriverUnload(_In_ WDFDRIVER driver)
 /*++
 Routine Description:
 
@@ -134,10 +119,7 @@ Return Value:
 }
 
 NTSTATUS
-DVServerKMDEvtDeviceAdd(
-	_In_    WDFDRIVER       Driver,
-	_Inout_ PWDFDEVICE_INIT DeviceInit
-)
+DVServerKMDEvtDeviceAdd(_In_ WDFDRIVER Driver, _Inout_ PWDFDEVICE_INIT DeviceInit)
 /*++
 Routine Description:
 
@@ -164,7 +146,6 @@ Return Value:
 	TRACING();
 
 	PAGED_CODE();
-
 
 	WdfDeviceInitSetIoType(DeviceInit, WdfDeviceIoDirect);
 
@@ -201,14 +182,10 @@ Return Value:
 	//
 	status = DVServerKMDCreateDevice(DeviceInit);
 
-
 	return status;
 }
 
-VOID
-DVServerKMDEvtDriverContextCleanup(
-	_In_ WDFOBJECT DriverObject
-)
+VOID DVServerKMDEvtDriverContextCleanup(_In_ WDFOBJECT DriverObject)
 /*++
 Routine Description:
 

@@ -13,20 +13,21 @@
 #include "dvutil.tmh"
 
 /*******************************************************************************
-*
-* Description
-*
-* dvGetInstalledOemInfFileName - Retrieves the Device passed OEM file name
-*
-* Parameters
-*   deviceDesc - Device descrption of the driver.
-*   infFileName - OEM INF file name from drive store.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-*******************************************************************************/
-BOOL  dvGetInstalledOemInfFileName(const wchar_t* deviceDesc, WCHAR* infFileName) {
+ *
+ * Description
+ *
+ * dvGetInstalledOemInfFileName - Retrieves the Device passed OEM file name
+ *
+ * Parameters
+ *   deviceDesc - Device descrption of the driver.
+ *   infFileName - OEM INF file name from drive store.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ *******************************************************************************/
+BOOL dvGetInstalledOemInfFileName(const wchar_t *deviceDesc, WCHAR *infFileName)
+{
 
 	BOOL result = FALSE;
 	DWORD index = 0, size = 0;
@@ -46,14 +47,14 @@ BOOL  dvGetInstalledOemInfFileName(const wchar_t* deviceDesc, WCHAR* infFileName
 	devInfo.cbSize = sizeof(SP_DEVINFO_DATA);
 	for (index = 0; SetupDiEnumDeviceInfo(devInfoSet, index, &devInfo); index++) {
 		// Build a list of driver info items
-		if (!SetupDiGetDeviceRegistryProperty(devInfoSet, &devInfo, SPDRP_DEVICEDESC,
-			NULL, (PBYTE)deviceName, sizeof(deviceName), &size)) {
+		if (!SetupDiGetDeviceRegistryProperty(devInfoSet, &devInfo, SPDRP_DEVICEDESC, NULL, (PBYTE)deviceName,
+											  sizeof(deviceName), &size)) {
 			continue;
 		}
 		if (wcsstr(deviceName, deviceDesc)) {
 			DBGPRINT("\nDevice is found");
-			if (SetupDiGetDeviceProperty(devInfoSet, &devInfo, &DEVPKEY_Device_DriverInfPath,
-				&propType, (PBYTE)infFileName, bufferSize, &bufferSize, 0)) {
+			if (SetupDiGetDeviceProperty(devInfoSet, &devInfo, &DEVPKEY_Device_DriverInfPath, &propType,
+										 (PBYTE)infFileName, bufferSize, &bufferSize, 0)) {
 				DBGPRINT("\nDevice INF found");
 				result = TRUE;
 				break;
@@ -65,16 +66,16 @@ BOOL  dvGetInstalledOemInfFileName(const wchar_t* deviceDesc, WCHAR* infFileName
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvDeviceScan - Does the device scan.
-*
-* Parameters
-*
-* Return val
-* BOOL - TRUE on success, FALSE on failure
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvDeviceScan - Does the device scan.
+ *
+ * Parameters
+ *
+ * Return val
+ * BOOL - TRUE on success, FALSE on failure
+ ******************************************************************************/
 BOOL dvDeviceScan(void)
 {
 	HMACHINE machineHandle = NULL;
@@ -95,20 +96,20 @@ BOOL dvDeviceScan(void)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvFileExists - Checks if file is present in the path of executable.
-*
-*
-* Parameters
-*   file - file name.
-*   filePath - full path to the file
-*
-* Return val
-* BOOL - TRUE on success, FALSE on failure
-******************************************************************************/
-BOOL dvFileExists(const std::wstring& file, std::wstring& filePath)
+ *
+ * Description
+ *
+ * dvFileExists - Checks if file is present in the path of executable.
+ *
+ *
+ * Parameters
+ *   file - file name.
+ *   filePath - full path to the file
+ *
+ * Return val
+ * BOOL - TRUE on success, FALSE on failure
+ ******************************************************************************/
+BOOL dvFileExists(const std::wstring &file, std::wstring &filePath)
 {
 	wchar_t buffer[MAX_PATH];
 	DWORD length;
@@ -127,22 +128,22 @@ BOOL dvFileExists(const std::wstring& file, std::wstring& filePath)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvAddCertificate - Adds the certifcate file to ROOT system store.
-*
-*
-* Parameters
-*   certFile - FULL path to the certificate file.
-*
-* Return val
-* BOOL - TRUE on success, FALSE on failure
-******************************************************************************/
-BOOL dvAddCertificate(const std::wstring& certFile)
+ *
+ * Description
+ *
+ * dvAddCertificate - Adds the certifcate file to ROOT system store.
+ *
+ *
+ * Parameters
+ *   certFile - FULL path to the certificate file.
+ *
+ * Return val
+ * BOOL - TRUE on success, FALSE on failure
+ ******************************************************************************/
+BOOL dvAddCertificate(const std::wstring &certFile)
 {
 	HANDLE hKeyFile;
-	PCCERT_CONTEXT  certContext;
+	PCCERT_CONTEXT certContext;
 	HCERTSTORE hCertStore;
 	DWORD dwFileSize;
 	DWORD bytesRead = 0;
@@ -157,18 +158,18 @@ BOOL dvAddCertificate(const std::wstring& certFile)
 			if (ReadFile(hKeyFile, certBuffer.data(), dwFileSize, &bytesRead, NULL)) {
 				hCertStore = CertOpenStore(CERT_STORE_PROV_SYSTEM, 0, NULL, CERT_SYSTEM_STORE_LOCAL_MACHINE, L"ROOT");
 				if (hCertStore) {
-					certContext = CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, certBuffer.data(), bytesRead);
+					certContext = CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
+															   certBuffer.data(), bytesRead);
 					if (certContext) {
-						if (CertAddCertificateContextToStore(hCertStore, certContext, CERT_STORE_ADD_REPLACE_EXISTING, nullptr)) {
+						if (CertAddCertificateContextToStore(hCertStore, certContext, CERT_STORE_ADD_REPLACE_EXISTING,
+															 nullptr)) {
 							DBGPRINT("certificate added successfully to the root store");
 							result = TRUE;
-						}
-						else {
+						} else {
 							ERR("CertAddCertificateContextToStore:failed to add certificate");
 						}
 						CertFreeCertificateContext(certContext);
-					}
-					else {
+					} else {
 						ERR("failed to get context");
 					}
 					if (!CertCloseStore(hCertStore, CERT_CLOSE_STORE_FORCE_FLAG)) {
@@ -183,19 +184,19 @@ BOOL dvAddCertificate(const std::wstring& certFile)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvUpdateCertifcates - Installs DVServer.cer and DVServerKMD.cer certificates.
-*                       if no certificates files are present this API shall return
-*                       EXIT_OK, since this is MSFT/intel signed driver.
-*
-* Parameters
-*   NONE
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvUpdateCertifcates - Installs DVServer.cer and DVServerKMD.cer certificates.
+ *                       if no certificates files are present this API shall return
+ *                       EXIT_OK, since this is MSFT/intel signed driver.
+ *
+ * Parameters
+ *   NONE
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ ******************************************************************************/
 int dvUpdateCertifcates(void)
 {
 	std::wstring certFilePath;
@@ -203,43 +204,40 @@ int dvUpdateCertifcates(void)
 
 	TRACING();
 	try {
-		std::vector<std::wstring> certfiles = { L"DVServer.cer",L"DVServerKMD.cer" };
-		for (const std::wstring& certfile : certfiles) {
+		std::vector<std::wstring> certfiles = {L"DVServer.cer", L"DVServerKMD.cer"};
+		for (const std::wstring &certfile : certfiles) {
 			if (dvFileExists(certfile, certFilePath)) {
 				if (!dvAddCertificate(certFilePath)) {
 					DBGPRINT("\nFailed to Certificates ");
 					result = EXIT_FAIL;
-				}
-				else {
+				} else {
 					DBGPRINT("\nCertificates added successfully");
 				}
-			}
-			else {
+			} else {
 				DBGPRINT("\n No Certificate files found");
 			}
 		}
-	}
-	catch (const std::exception& e) {
+	} catch (const std::exception &e) {
 		DBGPRINT("Exception in string allocation");
 	}
 	return result;
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvGetInfPath - Retrieves infPath (full path) of file (infFile) by merging
-*               current drive and directory.
-*
-* Parameters
-*   infFile - INF filename.
-*   infPath - full path of the INF.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-******************************************************************************/
-int dvGetInfPath(TCHAR* infFile, TCHAR* infPath)
+ *
+ * Description
+ *
+ * dvGetInfPath - Retrieves infPath (full path) of file (infFile) by merging
+ *               current drive and directory.
+ *
+ * Parameters
+ *   infFile - INF filename.
+ *   infPath - full path of the INF.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ ******************************************************************************/
+int dvGetInfPath(TCHAR *infFile, TCHAR *infPath)
 {
 	DWORD res;
 
@@ -257,19 +255,19 @@ int dvGetInfPath(TCHAR* infFile, TCHAR* infPath)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvLoadUnloadNewdevLib Loads the module into the address space .
-*
-* Parameters
-*   newdevMod - handle to the newdev.dll module.
-*   isLoad -    specify's newdev.dll module to be loaded or unloaded.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-******************************************************************************/
-int dvLoadUnloadNewdevLib(HMODULE* newdevMod, BOOL isLoad)
+ *
+ * Description
+ *
+ * dvLoadUnloadNewdevLib Loads the module into the address space .
+ *
+ * Parameters
+ *   newdevMod - handle to the newdev.dll module.
+ *   isLoad -    specify's newdev.dll module to be loaded or unloaded.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ ******************************************************************************/
+int dvLoadUnloadNewdevLib(HMODULE *newdevMod, BOOL isLoad)
 {
 	TRACING();
 	if (!newdevMod) {
@@ -282,15 +280,13 @@ int dvLoadUnloadNewdevLib(HMODULE* newdevMod, BOOL isLoad)
 			ERR("\nFailed to load NewdevLib. Error code: %lu\n", dwError);
 			return EXIT_FAIL;
 		}
-	}
-	else {
+	} else {
 		if (*newdevMod) {
 			if (!FreeLibrary(*newdevMod)) {
 				ERR("\nFailed to unload NewdevLib \n");
 				return EXIT_FAIL;
 			}
-		}
-		else {
+		} else {
 			ERR("\n*newdevMod is empty \n");
 		}
 	}
@@ -298,20 +294,20 @@ int dvLoadUnloadNewdevLib(HMODULE* newdevMod, BOOL isLoad)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvKillProcessByModuleName: Enumerates all the modules process owns to check if
-*                      moduleName is present and kills the process if it owns.
-*
-* Parameters
-*   processID - PID of the process.
-*   moduleNameToKill - specifies the module name to be found and terminated.
-*
-* Return val
-* none.
-*
-*******************************************************************************/
+ *
+ * Description
+ *
+ * dvKillProcessByModuleName: Enumerates all the modules process owns to check if
+ *                      moduleName is present and kills the process if it owns.
+ *
+ * Parameters
+ *   processID - PID of the process.
+ *   moduleNameToKill - specifies the module name to be found and terminated.
+ *
+ * Return val
+ * none.
+ *
+ *******************************************************************************/
 void dvKillProcessByModuleName(DWORD processID, std::wstring moduleNameToKill)
 {
 	HANDLE hProcess;
@@ -323,9 +319,7 @@ void dvKillProcessByModuleName(DWORD processID, std::wstring moduleNameToKill)
 
 	TRACING();
 	// Get a handle to the process.
-	hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ
-		| PROCESS_TERMINATE,
-		FALSE, processID);
+	hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ | PROCESS_TERMINATE, FALSE, processID);
 	if (NULL != hProcess) {
 		if (EnumProcessModules(hProcess, hModules, sizeof(hModules), &moduleSize)) {
 			moduleCount = moduleSize / sizeof(HMODULE);
@@ -339,16 +333,13 @@ void dvKillProcessByModuleName(DWORD processID, std::wstring moduleNameToKill)
 							if (moduleName == dllname) {
 								if (TerminateProcess(hProcess, 0)) {
 									DBGPRINT(" Terminated");
-								}
-								else {
+								} else {
 									ERR("failed to terminate process ");
 								}
 								break;
 							}
 						}
-					}
-					catch (const std::exception& e)
-					{
+					} catch (const std::exception &e) {
 						DBGPRINT("an exception occurred while terminating the process");
 					}
 				}
@@ -359,17 +350,17 @@ void dvKillProcessByModuleName(DWORD processID, std::wstring moduleNameToKill)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvKillDll: Enumerates all the process in the system and kills the specified
-*            module.
-*
-* Parameters
-*   moduleName - Name of the module to be terminated.
-*
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * dvKillDll: Enumerates all the process in the system and kills the specified
+ *            module.
+ *
+ * Parameters
+ *   moduleName - Name of the module to be terminated.
+ *
+ *
+ ******************************************************************************/
 void dvKillDll(std::wstring moduleName)
 {
 	DWORD process[1024], ProcessSize, numProcesses;
@@ -382,8 +373,7 @@ void dvKillDll(std::wstring moduleName)
 			if (process[i] != 0) {
 				try {
 					dvKillProcessByModuleName(process[i], moduleName);
-				}
-				catch (const std::bad_alloc& e) {
+				} catch (const std::bad_alloc &e) {
 					DBGPRINT("exception occurred while try to terminate");
 				}
 			}
@@ -392,19 +382,20 @@ void dvKillDll(std::wstring moduleName)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* dvGetInstalledOemInfFile: retrieves OEM INF file path from the driver store.
-*
-* Parameters
-*   infFullPath - Installed Driver OEM INF file with full path from drive store.
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-******************************************************************************/
-int  dvGetInstalledOemInfFile(WCHAR* infFullPath) {
+ *
+ * Description
+ *
+ * dvGetInstalledOemInfFile: retrieves OEM INF file path from the driver store.
+ *
+ * Parameters
+ *   infFullPath - Installed Driver OEM INF file with full path from drive store.
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ ******************************************************************************/
+int dvGetInstalledOemInfFile(WCHAR *infFullPath)
+{
 
 	int result = EXIT_FAIL;
 	DWORD index = 0, size = 0;
@@ -424,13 +415,14 @@ int  dvGetInstalledOemInfFile(WCHAR* infFullPath) {
 	devInfo.cbSize = sizeof(SP_DEVINFO_DATA);
 	for (index = 0; SetupDiEnumDeviceInfo(devInfoSet, index, &devInfo); index++) {
 		// Build a list of driver info items
-		if (!SetupDiGetDeviceRegistryProperty(
-			devInfoSet, &devInfo, SPDRP_DEVICEDESC, NULL, (PBYTE)deviceName, sizeof(deviceName), &size)) {
+		if (!SetupDiGetDeviceRegistryProperty(devInfoSet, &devInfo, SPDRP_DEVICEDESC, NULL, (PBYTE)deviceName,
+											  sizeof(deviceName), &size)) {
 			continue;
 		}
 		if (wcsstr(deviceName, filter_device_desc)) {
 			DBGPRINT("DVServerKMD Device is found,\n");
-			if (SetupDiGetDeviceProperty(devInfoSet, &devInfo, &DEVPKEY_Device_DriverInfPath, &propType, (PBYTE)infpath, bufferSize, &bufferSize, 0)) {
+			if (SetupDiGetDeviceProperty(devInfoSet, &devInfo, &DEVPKEY_Device_DriverInfPath, &propType, (PBYTE)infpath,
+										 bufferSize, &bufferSize, 0)) {
 				DBGPRINT("DVServerKMD Device OEM file found");
 				if (SetupGetInfDriverStoreLocation(infpath, nullptr, nullptr, infFullPath, MAX_PATH, nullptr)) {
 					DBGPRINT("DVServerKMD Device OEM file path");

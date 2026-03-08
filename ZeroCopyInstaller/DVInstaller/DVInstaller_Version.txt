@@ -8,4 +8,4 @@
 ;   This file will have the DVInstaller version 
 ;--------------------------------------------------------------------------*/
 
-DVInstaller_Version = 1.0.0
+DVInstaller_Version = 1.0.2

@@ -35,60 +35,60 @@
 #include <wdf.h>
 #include "kdebugprint.h"
 
-typedef struct virtio_wdf_bar {
-    SINGLE_LIST_ENTRY ListEntry;
+typedef struct virtio_wdf_bar
+{
+	SINGLE_LIST_ENTRY ListEntry;
 
-    int               iBar;
-    PHYSICAL_ADDRESS  BasePA;
-    ULONG             uLength;
-    PVOID             pBase;
-    bool              bPortSpace;
+	int iBar;
+	PHYSICAL_ADDRESS BasePA;
+	ULONG uLength;
+	PVOID pBase;
+	bool bPortSpace;
 } VIRTIO_WDF_BAR, *PVIRTIO_WDF_BAR;
 
-typedef struct virtio_wdf_interrupt_context {
-    /* This is a workaround for a WDF bug where on resource rebalance
-     * it does not preserve the MessageNumber field of its internal
-     * data structures describing interrupts. As a result, we fail to
-     * report the right MSI message number to the virtio device when
-     * re-initializing it and it may stop working.
-     */
-    USHORT            uMessageNumber;
-    bool              bMessageNumberSet;
+typedef struct virtio_wdf_interrupt_context
+{
+	/* This is a workaround for a WDF bug where on resource rebalance
+	 * it does not preserve the MessageNumber field of its internal
+	 * data structures describing interrupts. As a result, we fail to
+	 * report the right MSI message number to the virtio device when
+	 * re-initializing it and it may stop working.
+	 */
+	USHORT uMessageNumber;
+	bool bMessageNumberSet;
 } VIRTIO_WDF_INTERRUPT_CONTEXT, *PVIRTIO_WDF_INTERRUPT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(VIRTIO_WDF_INTERRUPT_CONTEXT, GetInterruptContext)
 
-NTSTATUS PCIAllocBars(WDFCMRESLIST ResourcesTranslated,
-                      PVIRTIO_WDF_DRIVER pWdfDriver);
+NTSTATUS PCIAllocBars(WDFCMRESLIST ResourcesTranslated, PVIRTIO_WDF_DRIVER pWdfDriver);
 
 void PCIFreeBars(PVIRTIO_WDF_DRIVER pWdfDriver);
 
-int PCIReadConfig(PVIRTIO_WDF_DRIVER pWdfDriver,
-                  int where,
-                  void *buffer,
-                  size_t length);
+int PCIReadConfig(PVIRTIO_WDF_DRIVER pWdfDriver, int where, void *buffer, size_t length);
 
 NTSTATUS PCIRegisterInterrupt(WDFINTERRUPT Interrupt);
 
 u16 PCIGetMSIInterruptVector(WDFINTERRUPT Interrupt);
 
-typedef struct virtio_wdf_memory_block_context {
-    PVOID               pVirtualAddress;
-    PHYSICAL_ADDRESS    PhysicalAddress;
-    WDFCOMMONBUFFER     WdfBuffer;
-    size_t              Length;
-    ULONG               groupTag;
-    BOOLEAN             bToBeDeleted;
+typedef struct virtio_wdf_memory_block_context
+{
+	PVOID pVirtualAddress;
+	PHYSICAL_ADDRESS PhysicalAddress;
+	WDFCOMMONBUFFER WdfBuffer;
+	size_t Length;
+	ULONG groupTag;
+	BOOLEAN bToBeDeleted;
 } VIRTIO_WDF_MEMORY_BLOCK_CONTEXT, *PVIRTIO_WDF_MEMORY_BLOCK_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(VIRTIO_WDF_MEMORY_BLOCK_CONTEXT, GetMemoryBlockContext)
 
-typedef struct virtio_wdf_dma_transaction_context {
-    VIRTIO_DMA_TRANSACTION_PARAMS   parameters;
-    VirtIOWdfDmaTransactionCallback callback;
-    PMDL                            mdl;
-    PVOID                           buffer;
-    LONG                            refCount;
+typedef struct virtio_wdf_dma_transaction_context
+{
+	VIRTIO_DMA_TRANSACTION_PARAMS parameters;
+	VirtIOWdfDmaTransactionCallback callback;
+	PMDL mdl;
+	PVOID buffer;
+	LONG refCount;
 } VIRTIO_WDF_DMA_TRANSACTION_CONTEXT, *PVIRTIO_WDF_DMA_TRANSACTION_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(VIRTIO_WDF_DMA_TRANSACTION_CONTEXT, GetDmaTransactionContext)

@@ -34,189 +34,174 @@
 #include "VirtIOWdf.h"
 #include "private.h"
 
-//#define LEGACY_DMA_SUPPORTED
+// #define LEGACY_DMA_SUPPORTED
 
 static void *mem_alloc_contiguous_pages(void *context, size_t size)
 {
-    void *ret;
-    PVIRTIO_WDF_DRIVER pWdfDriver = context;
-    if (!pWdfDriver->bLegacyMode) {
-        return VirtIOWdfDeviceAllocDmaMemory(&pWdfDriver->VIODevice, size, 0);
-    }
+	void *ret;
+	PVIRTIO_WDF_DRIVER pWdfDriver = context;
+	if (!pWdfDriver->bLegacyMode) {
+		return VirtIOWdfDeviceAllocDmaMemory(&pWdfDriver->VIODevice, size, 0);
+	}
 #if defined(LEGACY_DMA_SUPPORTED)
-    PHYSICAL_ADDRESS HighestAcceptable;
-    HighestAcceptable.QuadPart = 0xFFFFFFFFFF;
+	PHYSICAL_ADDRESS HighestAcceptable;
+	HighestAcceptable.QuadPart = 0xFFFFFFFFFF;
 #if defined(NTDDI_WIN8) && (NTDDI_VERSION >= NTDDI_WIN8)
-    {
-        PHYSICAL_ADDRESS Zero = { 0 };
-        ret = MmAllocateContiguousNodeMemory(
-            size,
-            Zero,
-            HighestAcceptable,
-            Zero,
-            PAGE_READWRITE,
-            MM_ANY_NODE_OK);
-    }
+	{
+		PHYSICAL_ADDRESS Zero = {0};
+		ret = MmAllocateContiguousNodeMemory(size, Zero, HighestAcceptable, Zero, PAGE_READWRITE, MM_ANY_NODE_OK);
+	}
 #else
-    ret = MmAllocateContiguousMemory(size, HighestAcceptable);
+	ret = MmAllocateContiguousMemory(size, HighestAcceptable);
 #endif
-    if (ret != NULL) {
-        RtlZeroMemory(ret, size);
-    }
+	if (ret != NULL) {
+		RtlZeroMemory(ret, size);
+	}
 #else
-    ret = NULL;
+	ret = NULL;
 #endif
-    return ret;
+	return ret;
 }
 
 static void mem_free_contiguous_pages(void *context, void *virt)
 {
-    PVIRTIO_WDF_DRIVER pWdfDriver = context;
-    if (!pWdfDriver->bLegacyMode) {
-        VirtIOWdfDeviceFreeDmaMemory(&pWdfDriver->VIODevice, virt);
-        return;
-    }
+	PVIRTIO_WDF_DRIVER pWdfDriver = context;
+	if (!pWdfDriver->bLegacyMode) {
+		VirtIOWdfDeviceFreeDmaMemory(&pWdfDriver->VIODevice, virt);
+		return;
+	}
 
 #if defined(LEGACY_DMA_SUPPORTED)
-    MmFreeContiguousMemory(virt);
+	MmFreeContiguousMemory(virt);
 #endif
 }
 
 static ULONGLONG mem_get_physical_address(void *context, void *virt)
 {
-    PVIRTIO_WDF_DRIVER pWdfDriver = context;
-    PHYSICAL_ADDRESS pa;
-    if (!pWdfDriver->bLegacyMode) {
-        pa = VirtIOWdfDeviceGetPhysicalAddress(&pWdfDriver->VIODevice, virt);
-    } else {
-        pa.QuadPart = 0;
+	PVIRTIO_WDF_DRIVER pWdfDriver = context;
+	PHYSICAL_ADDRESS pa;
+	if (!pWdfDriver->bLegacyMode) {
+		pa = VirtIOWdfDeviceGetPhysicalAddress(&pWdfDriver->VIODevice, virt);
+	} else {
+		pa.QuadPart = 0;
 #if defined(LEGACY_DMA_SUPPORTED)
-        pa = MmGetPhysicalAddress(virt);
-        return pa.QuadPart;
+		pa = MmGetPhysicalAddress(virt);
+		return pa.QuadPart;
 #endif
-    }
-    if (!pa.QuadPart) {
-        DPrintf(0, "%s WARNING: got zero physical address\n", __FUNCTION__);
-    }
-    return pa.QuadPart;
+	}
+	if (!pa.QuadPart) {
+		DPrintf(0, "%s WARNING: got zero physical address\n", __FUNCTION__);
+	}
+	return pa.QuadPart;
 }
 
 static void *mem_alloc_nonpaged_block(void *context, size_t size)
 {
-    PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
+	PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
 
-    PVOID addr = ExAllocatePoolWithTag(
-        NonPagedPool,
-        size,
-        pWdfDriver->MemoryTag);
-    if (addr) {
-        RtlZeroMemory(addr, size);
-    }
-    return addr;
+	PVOID addr = ExAllocatePoolWithTag(NonPagedPool, size, pWdfDriver->MemoryTag);
+	if (addr) {
+		RtlZeroMemory(addr, size);
+	}
+	return addr;
 }
 
 static void mem_free_nonpaged_block(void *context, void *addr)
 {
-    PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
+	PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
 
-    ExFreePoolWithTag(
-        addr,
-        pWdfDriver->MemoryTag);
+	ExFreePoolWithTag(addr, pWdfDriver->MemoryTag);
 }
 
 static int pci_read_config_byte(void *context, int where, u8 *bVal)
 {
-    return PCIReadConfig((PVIRTIO_WDF_DRIVER)context, where, bVal, sizeof(*bVal));
+	return PCIReadConfig((PVIRTIO_WDF_DRIVER)context, where, bVal, sizeof(*bVal));
 }
 
 static int pci_read_config_word(void *context, int where, u16 *wVal)
 {
-    return PCIReadConfig((PVIRTIO_WDF_DRIVER)context, where, wVal, sizeof(*wVal));
+	return PCIReadConfig((PVIRTIO_WDF_DRIVER)context, where, wVal, sizeof(*wVal));
 }
 
 static int pci_read_config_dword(void *context, int where, u32 *dwVal)
 {
-    return PCIReadConfig((PVIRTIO_WDF_DRIVER)context, where, dwVal, sizeof(*dwVal));
+	return PCIReadConfig((PVIRTIO_WDF_DRIVER)context, where, dwVal, sizeof(*dwVal));
 }
 
 static PVIRTIO_WDF_BAR find_bar(void *context, int bar)
 {
-    PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
-    PSINGLE_LIST_ENTRY iter = &pWdfDriver->PCIBars;
-    
-    while (iter->Next != NULL) {
-        PVIRTIO_WDF_BAR pBar = CONTAINING_RECORD(iter->Next, VIRTIO_WDF_BAR, ListEntry);
-        if (pBar->iBar == bar) {
-            return pBar;
-        }
-        iter = iter->Next;
-    }
-    return NULL;
+	PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
+	PSINGLE_LIST_ENTRY iter = &pWdfDriver->PCIBars;
+
+	while (iter->Next != NULL) {
+		PVIRTIO_WDF_BAR pBar = CONTAINING_RECORD(iter->Next, VIRTIO_WDF_BAR, ListEntry);
+		if (pBar->iBar == bar) {
+			return pBar;
+		}
+		iter = iter->Next;
+	}
+	return NULL;
 }
 
 static size_t pci_get_resource_len(void *context, int bar)
 {
-    PVIRTIO_WDF_BAR pBar = find_bar(context, bar);
-    return (pBar ? pBar->uLength : 0);
+	PVIRTIO_WDF_BAR pBar = find_bar(context, bar);
+	return (pBar ? pBar->uLength : 0);
 }
 
 static void *pci_map_address_range(void *context, int bar, size_t offset, size_t maxlen)
 {
-    PVIRTIO_WDF_BAR pBar = find_bar(context, bar);
-    if (pBar) {
-        if (pBar->pBase == NULL) {
-            ASSERT(!pBar->bPortSpace);
+	PVIRTIO_WDF_BAR pBar = find_bar(context, bar);
+	if (pBar) {
+		if (pBar->pBase == NULL) {
+			ASSERT(!pBar->bPortSpace);
 #if defined(NTDDI_WINTHRESHOLD) && (NTDDI_VERSION >= NTDDI_WINTHRESHOLD)
-            pBar->pBase = MmMapIoSpaceEx(
-                pBar->BasePA,
-                pBar->uLength,
-                PAGE_READWRITE | PAGE_NOCACHE);
+			pBar->pBase = MmMapIoSpaceEx(pBar->BasePA, pBar->uLength, PAGE_READWRITE | PAGE_NOCACHE);
 #else
-            pBar->pBase = MmMapIoSpace(pBar->BasePA, pBar->uLength, MmNonCached);
+			pBar->pBase = MmMapIoSpace(pBar->BasePA, pBar->uLength, MmNonCached);
 #endif
-        }
-        if (pBar->pBase != NULL && offset < pBar->uLength) {
-            return (char *)pBar->pBase + offset;
-        }
-    }
-    return NULL;
+		}
+		if (pBar->pBase != NULL && offset < pBar->uLength) {
+			return (char *)pBar->pBase + offset;
+		}
+	}
+	return NULL;
 }
 
 static u16 vdev_get_msix_vector(void *context, int queue)
 {
-    PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
-    u16 vector = VIRTIO_MSI_NO_VECTOR;
+	PVIRTIO_WDF_DRIVER pWdfDriver = (PVIRTIO_WDF_DRIVER)context;
+	u16 vector = VIRTIO_MSI_NO_VECTOR;
 
-    if (queue >= 0) {
-        /* queue interrupt */
-        if (pWdfDriver->pQueueParams != NULL) {
-            vector = PCIGetMSIInterruptVector(pWdfDriver->pQueueParams[queue].Interrupt);
-        }
-    }
-    else {
-        /* on-device-config-change interrupt */
-        vector = PCIGetMSIInterruptVector(pWdfDriver->ConfigInterrupt);
-    }
+	if (queue >= 0) {
+		/* queue interrupt */
+		if (pWdfDriver->pQueueParams != NULL) {
+			vector = PCIGetMSIInterruptVector(pWdfDriver->pQueueParams[queue].Interrupt);
+		}
+	} else {
+		/* on-device-config-change interrupt */
+		vector = PCIGetMSIInterruptVector(pWdfDriver->ConfigInterrupt);
+	}
 
-    return vector;
+	return vector;
 }
 
 static void vdev_sleep(void *context, unsigned int msecs)
 {
-    NTSTATUS status = STATUS_UNSUCCESSFUL;
+	NTSTATUS status = STATUS_UNSUCCESSFUL;
 
-    UNREFERENCED_PARAMETER(context);
+	UNREFERENCED_PARAMETER(context);
 
-    if (KeGetCurrentIrql() <= APC_LEVEL) {
-        LARGE_INTEGER delay;
-        delay.QuadPart = Int32x32To64(msecs, -10000);
-        status = KeDelayExecutionThread(KernelMode, FALSE, &delay);
-    }
+	if (KeGetCurrentIrql() <= APC_LEVEL) {
+		LARGE_INTEGER delay;
+		delay.QuadPart = Int32x32To64(msecs, -10000);
+		status = KeDelayExecutionThread(KernelMode, FALSE, &delay);
+	}
 
-    if (!NT_SUCCESS(status)) {
-        /* fall back to busy wait if we're not allowed to sleep */
-        KeStallExecutionProcessor(1000 * msecs);
-    }
+	if (!NT_SUCCESS(status)) {
+		/* fall back to busy wait if we're not allowed to sleep */
+		KeStallExecutionProcessor(1000 * msecs);
+	}
 }
 
 extern u32 ReadVirtIODeviceRegister(ULONG_PTR ulRegister);
@@ -227,22 +212,22 @@ extern u16 ReadVirtIODeviceWord(ULONG_PTR ulRegister);
 extern void WriteVirtIODeviceWord(ULONG_PTR ulRegister, u16 bValue);
 
 VirtIOSystemOps VirtIOWdfSystemOps = {
-    .vdev_read_byte = ReadVirtIODeviceByte,
-    .vdev_read_word = ReadVirtIODeviceWord,
-    .vdev_read_dword = ReadVirtIODeviceRegister,
-    .vdev_write_byte = WriteVirtIODeviceByte,
-    .vdev_write_word = WriteVirtIODeviceWord,
-    .vdev_write_dword = WriteVirtIODeviceRegister,
-    .mem_alloc_contiguous_pages = mem_alloc_contiguous_pages,
-    .mem_free_contiguous_pages = mem_free_contiguous_pages,
-    .mem_get_physical_address = mem_get_physical_address,
-    .mem_alloc_nonpaged_block = mem_alloc_nonpaged_block,
-    .mem_free_nonpaged_block = mem_free_nonpaged_block,
-    .pci_read_config_byte = pci_read_config_byte,
-    .pci_read_config_word = pci_read_config_word,
-    .pci_read_config_dword = pci_read_config_dword,
-    .pci_get_resource_len = pci_get_resource_len,
-    .pci_map_address_range = pci_map_address_range,
-    .vdev_get_msix_vector = vdev_get_msix_vector,
-    .vdev_sleep = vdev_sleep,
+	.vdev_read_byte = ReadVirtIODeviceByte,
+	.vdev_read_word = ReadVirtIODeviceWord,
+	.vdev_read_dword = ReadVirtIODeviceRegister,
+	.vdev_write_byte = WriteVirtIODeviceByte,
+	.vdev_write_word = WriteVirtIODeviceWord,
+	.vdev_write_dword = WriteVirtIODeviceRegister,
+	.mem_alloc_contiguous_pages = mem_alloc_contiguous_pages,
+	.mem_free_contiguous_pages = mem_free_contiguous_pages,
+	.mem_get_physical_address = mem_get_physical_address,
+	.mem_alloc_nonpaged_block = mem_alloc_nonpaged_block,
+	.mem_free_nonpaged_block = mem_free_nonpaged_block,
+	.pci_read_config_byte = pci_read_config_byte,
+	.pci_read_config_word = pci_read_config_word,
+	.pci_read_config_dword = pci_read_config_dword,
+	.pci_get_resource_len = pci_get_resource_len,
+	.pci_map_address_range = pci_map_address_range,
+	.vdev_get_msix_vector = vdev_get_msix_vector,
+	.vdev_sleep = vdev_sleep,
 };

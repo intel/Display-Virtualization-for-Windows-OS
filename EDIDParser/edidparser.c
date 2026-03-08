@@ -11,22 +11,22 @@
 #include "edidparser.h"
 
 /*******************************************************************************
-*
-* Description
-*
-* parse_edid_data - First checks the validity of the hex_input. If valid, then
-* parses all the resolution modelist from it.
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-* struct output_modelist* modelist - output modelist structure containing
-* all the supported modes (width, height & refresh_rate)
-*
-* Return val
-* int - 0 = SUCCESS, -1 = ERROR
-*
-******************************************************************************/
-int parse_edid_data(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+ *
+ * Description
+ *
+ * parse_edid_data - First checks the validity of the hex_input. If valid, then
+ * parses all the resolution modelist from it.
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ * struct output_modelist* modelist - output modelist structure containing
+ * all the supported modes (width, height & refresh_rate)
+ *
+ * Return val
+ * int - 0 = SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
+int parse_edid_data(unsigned char *edid_data, struct output_modelist *kmd_modelist)
 {
 	int func_result = -1;
 	int index = 0;
@@ -50,39 +50,36 @@ int parse_edid_data(unsigned char* edid_data, struct output_modelist* kmd_modeli
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* validate_edid_header - Ensures that the header of the input is valid. If
-* invalid, then the parser exits.
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-*
-* Return val
-* int - 0 = SUCCESS, -1/1 = ERROR
-*
-******************************************************************************/
-int validate_edid_header(unsigned char* edid_data)
-{
-	return memcmp(edid_data, g_edid_header, EDID_HEADER_SIZE);
-}
+ *
+ * Description
+ *
+ * validate_edid_header - Ensures that the header of the input is valid. If
+ * invalid, then the parser exits.
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ *
+ * Return val
+ * int - 0 = SUCCESS, -1/1 = ERROR
+ *
+ ******************************************************************************/
+int validate_edid_header(unsigned char *edid_data) { return memcmp(edid_data, g_edid_header, EDID_HEADER_SIZE); }
 
 /*******************************************************************************
-*
-* Description
-*
-* validate_edid_checksum - Ensures that the checksum of the input is valid. If
-* invalid, then the parser exits.
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-*
-* Return val
-* int - 0 = SUCCESS, -1 = ERROR
-*
-******************************************************************************/
-int validate_edid_checksum(unsigned char* edid_data)
+ *
+ * Description
+ *
+ * validate_edid_checksum - Ensures that the checksum of the input is valid. If
+ * invalid, then the parser exits.
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ *
+ * Return val
+ * int - 0 = SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
+int validate_edid_checksum(unsigned char *edid_data)
 {
 	int index = 0;
 	int chksum = 0;
@@ -105,22 +102,22 @@ int validate_edid_checksum(unsigned char* edid_data)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* get_cea_modes - parses the VIC codes which contain the variety of
-* resolutions ranging from small basic resolutions to higher ones.
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-* struct output_modelist* modelist - output modelist structure containing
-* all the supported modes (width, height & refresh_rate)
-*
-* Return val
-* void
-*
-******************************************************************************/
-void get_cea_modes(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+ *
+ * Description
+ *
+ * get_cea_modes - parses the VIC codes which contain the variety of
+ * resolutions ranging from small basic resolutions to higher ones.
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ * struct output_modelist* modelist - output modelist structure containing
+ * all the supported modes (width, height & refresh_rate)
+ *
+ * Return val
+ * void
+ *
+ ******************************************************************************/
+void get_cea_modes(unsigned char *edid_data, struct output_modelist *kmd_modelist)
 {
 	int i = 0;
 	int vic_number = 0;
@@ -153,22 +150,18 @@ void get_cea_modes(unsigned char* edid_data, struct output_modelist* kmd_modelis
 				}
 				// VIC Number from 1 to 127
 				if (vic_number <= CEA_MODELIST_FIRST_BLOCK) {
-					kmd_modelist->modelist[kmd_modelist->modelist_size].width
-						= cea_modelist[vic_number - 1].width;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].height
-						= cea_modelist[vic_number - 1].height;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
-						= cea_modelist[vic_number - 1].refresh_rate;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].width = cea_modelist[vic_number - 1].width;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].height = cea_modelist[vic_number - 1].height;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate =
+						cea_modelist[vic_number - 1].refresh_rate;
 					kmd_modelist->modelist_size++;
 				}
 				// VIC Number from 193 to 219
 				else if (vic_number >= CEA_MODELIST_SECOND_BLOCK) {
-					kmd_modelist->modelist[kmd_modelist->modelist_size].width
-						= cea_modelist[vic_number - 65].width;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].height
-						= cea_modelist[vic_number - 65].height;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
-						= cea_modelist[vic_number - 65].refresh_rate;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].width = cea_modelist[vic_number - 65].width;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].height = cea_modelist[vic_number - 65].height;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate =
+						cea_modelist[vic_number - 65].refresh_rate;
 					kmd_modelist->modelist_size++;
 				}
 			}
@@ -181,22 +174,22 @@ void get_cea_modes(unsigned char* edid_data, struct output_modelist* kmd_modelis
 }
 
 /******************************************************************************
-*
-* Description
-*
-* get_standard_modes - parses the standard display resolutions which are
-* larger than timing_bitmap resolutions.
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-* struct output_modelist* modelist - output modelist structure containing
-* all the supported modes (width, height & refresh_rate)
-*
-* Return val
-* void
-*
-******************************************************************************/
-void get_standard_modes(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+ *
+ * Description
+ *
+ * get_standard_modes - parses the standard display resolutions which are
+ * larger than timing_bitmap resolutions.
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ * struct output_modelist* modelist - output modelist structure containing
+ * all the supported modes (width, height & refresh_rate)
+ *
+ * Return val
+ * void
+ *
+ ******************************************************************************/
+void get_standard_modes(unsigned char *edid_data, struct output_modelist *kmd_modelist)
 {
 	int index = 0;
 	int width = -1;
@@ -212,8 +205,7 @@ void get_standard_modes(unsigned char* edid_data, struct output_modelist* kmd_mo
 		aspect_ratio = edid_data[index + 1];
 		aspect_ratio >>= 6;
 
-		switch (aspect_ratio)
-		{
+		switch (aspect_ratio) {
 		case ASPECT_RATIO_16_10:
 			height = width * 10 / 16;
 			break;
@@ -240,21 +232,21 @@ void get_standard_modes(unsigned char* edid_data, struct output_modelist* kmd_mo
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* get_timing_bitmaps_modes - parses the basic resolutions of the display device
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-* struct output_modelist* modelist - output modelist structure containing
-* all the supported modes (width, height & refresh_rate)
-*
-* Return val
-* void
-*
-******************************************************************************/
-void get_timing_bitmaps_modes(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+ *
+ * Description
+ *
+ * get_timing_bitmaps_modes - parses the basic resolutions of the display device
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ * struct output_modelist* modelist - output modelist structure containing
+ * all the supported modes (width, height & refresh_rate)
+ *
+ * Return val
+ * void
+ *
+ ******************************************************************************/
+void get_timing_bitmaps_modes(unsigned char *edid_data, struct output_modelist *kmd_modelist)
 {
 	int i = 0;
 	int bit_index = 0;
@@ -270,12 +262,11 @@ void get_timing_bitmaps_modes(unsigned char* edid_data, struct output_modelist* 
 			// Traverse from the 1st bit to the 8th bit of timing_bitmap byte
 			for (bit_index = 0x0; bit_index <= 0x7; bit_index++) {
 				if ((tb_byte & 0x1) == 1) {
-					kmd_modelist->modelist[kmd_modelist->modelist_size].width
-						= timing_bitmap_modelist[tb_lookup].width;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].height
-						= timing_bitmap_modelist[tb_lookup].height;
-					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
-						= timing_bitmap_modelist[tb_lookup].refresh_rate;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].width = timing_bitmap_modelist[tb_lookup].width;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].height =
+						timing_bitmap_modelist[tb_lookup].height;
+					kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate =
+						timing_bitmap_modelist[tb_lookup].refresh_rate;
 					kmd_modelist->modelist_size++;
 				}
 				if ((tb_lookup >= 0) && (tb_lookup <= (TIMING_BITMAP_MODELIST_SIZE - 1))) {
@@ -286,15 +277,12 @@ void get_timing_bitmaps_modes(unsigned char* edid_data, struct output_modelist* 
 				}
 				tb_byte >>= 1;
 			}
-		}
-		else {
+		} else {
 			if (((tb_byte >>= 7) & 0x1) == 1) {
-				kmd_modelist->modelist[kmd_modelist->modelist_size].width
-					= timing_bitmap_modelist[tb_lookup].width;
-				kmd_modelist->modelist[kmd_modelist->modelist_size].height
-					= timing_bitmap_modelist[tb_lookup].height;
-				kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
-					= timing_bitmap_modelist[tb_lookup].refresh_rate;
+				kmd_modelist->modelist[kmd_modelist->modelist_size].width = timing_bitmap_modelist[tb_lookup].width;
+				kmd_modelist->modelist[kmd_modelist->modelist_size].height = timing_bitmap_modelist[tb_lookup].height;
+				kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate =
+					timing_bitmap_modelist[tb_lookup].refresh_rate;
 				kmd_modelist->modelist_size++;
 			}
 		}
@@ -302,24 +290,24 @@ void get_timing_bitmaps_modes(unsigned char* edid_data, struct output_modelist* 
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* get_additional_standard_display_modes - parses the additional standard
-* display resolutions which are not part of standard_display_modes
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-* struct output_modelist* modelist - output modelist structure containing
-* all the supported modes (width, height & refresh_rate)
-*
-* Return val
-* void
-*
-******************************************************************************/
-void get_additional_standard_display_modes(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+ *
+ * Description
+ *
+ * get_additional_standard_display_modes - parses the additional standard
+ * display resolutions which are not part of standard_display_modes
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ * struct output_modelist* modelist - output modelist structure containing
+ * all the supported modes (width, height & refresh_rate)
+ *
+ * Return val
+ * void
+ *
+ ******************************************************************************/
+void get_additional_standard_display_modes(unsigned char *edid_data, struct output_modelist *kmd_modelist)
 {
-	unsigned char* ptr_to_input_data = NULL;
+	unsigned char *ptr_to_input_data = NULL;
 	int start_index = 0;
 	int i = 0;
 	int index = 0;
@@ -343,12 +331,12 @@ void get_additional_standard_display_modes(unsigned char* edid_data, struct outp
 					// Traverse from the 1st bit to the 8th bit of the additional standard mode byte
 					for (bit = 0x0; bit <= 0x7; bit++) {
 						if ((asd_byte & 0x1) == 1) {
-							kmd_modelist->modelist[kmd_modelist->modelist_size].width
-								= additional_standard_timing_modelist[asd_lookup].width;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].height
-								= additional_standard_timing_modelist[asd_lookup].height;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
-								= additional_standard_timing_modelist[asd_lookup].refresh_rate;
+							kmd_modelist->modelist[kmd_modelist->modelist_size].width =
+								additional_standard_timing_modelist[asd_lookup].width;
+							kmd_modelist->modelist[kmd_modelist->modelist_size].height =
+								additional_standard_timing_modelist[asd_lookup].height;
+							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate =
+								additional_standard_timing_modelist[asd_lookup].refresh_rate;
 							kmd_modelist->modelist_size++;
 						}
 						if ((asd_lookup >= 0) && (asd_lookup <= (DTD_ADDITIONAL_STANDARD_TIMING_MODELIST_SIZE - 1))) {
@@ -369,12 +357,12 @@ void get_additional_standard_display_modes(unsigned char* edid_data, struct outp
 							break;
 						}
 						if ((asd_byte & 0x1) == 1) {
-							kmd_modelist->modelist[kmd_modelist->modelist_size].width
-								= additional_standard_timing_modelist[asd_lookup].width;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].height
-								= additional_standard_timing_modelist[asd_lookup].height;
-							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate
-								= additional_standard_timing_modelist[asd_lookup].refresh_rate;
+							kmd_modelist->modelist[kmd_modelist->modelist_size].width =
+								additional_standard_timing_modelist[asd_lookup].width;
+							kmd_modelist->modelist[kmd_modelist->modelist_size].height =
+								additional_standard_timing_modelist[asd_lookup].height;
+							kmd_modelist->modelist[kmd_modelist->modelist_size].refresh_rate =
+								additional_standard_timing_modelist[asd_lookup].refresh_rate;
 							kmd_modelist->modelist_size++;
 						}
 						if ((asd_lookup >= 0) && (asd_lookup <= (DTD_ADDITIONAL_STANDARD_TIMING_MODELIST_SIZE - 1))) {
@@ -390,25 +378,26 @@ void get_additional_standard_display_modes(unsigned char* edid_data, struct outp
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* get_detailed_timing_descriptor_modes - parses the detailed timing
-* descriptors if present in EDID
-*
-* Parameters
-* unsigned char *edid_data - input edid 256 bytes array
-* struct output_modelist* modelist - output modelist structure containing
-* all the supported modes (width, height & refresh_rate)
-*
-* Return val
-* void
-*
-******************************************************************************/
-static inline void get_detailed_timing_descriptor_modes(unsigned char* edid_data, struct output_modelist* kmd_modelist)
+ *
+ * Description
+ *
+ * get_detailed_timing_descriptor_modes - parses the detailed timing
+ * descriptors if present in EDID
+ *
+ * Parameters
+ * unsigned char *edid_data - input edid 256 bytes array
+ * struct output_modelist* modelist - output modelist structure containing
+ * all the supported modes (width, height & refresh_rate)
+ *
+ * Return val
+ * void
+ *
+ ******************************************************************************/
+static inline void get_detailed_timing_descriptor_modes(unsigned char *edid_data, struct output_modelist *kmd_modelist)
 {
-	unsigned char* ptr_to_input_data = NULL;
-	unsigned int dtd_h_active = 0, dtd_v_active = 0, dtd_pixel_clk = 0, dtd_h_blank = 0, dtd_v_blank = 0, dtd_h_total = 0, dtd_v_total = 0;
+	unsigned char *ptr_to_input_data = NULL;
+	unsigned int dtd_h_active = 0, dtd_v_active = 0, dtd_pixel_clk = 0, dtd_h_blank = 0, dtd_v_blank = 0,
+				 dtd_h_total = 0, dtd_v_total = 0;
 	double dtd_refresh_rate = 0;
 	int i = DTD_START;
 
@@ -416,11 +405,16 @@ static inline void get_detailed_timing_descriptor_modes(unsigned char* edid_data
 
 	while (i < (DTD_END - DTD_DISPLAY_DESCRIPTOR_HEADER_SIZE)) {
 		if (memcmp(ptr_to_input_data + i, g_dtd_display_header, DTD_DISPLAY_DESCRIPTOR_HEADER_SIZE) != 0) {
-			dtd_pixel_clk = (edid_data[i + BYTE_POSITION(0)] + (edid_data[i + BYTE_POSITION(1)] << SHIFT_INDEX(8))) * CLK_UNIT;
-			dtd_h_active = ((edid_data[i + BYTE_POSITION(4)] >> SHIFT_INDEX(4)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(2)];
-			dtd_v_active = ((edid_data[i + BYTE_POSITION(7)] >> SHIFT_INDEX(4)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(5)];
-			dtd_h_blank = ((edid_data[i + BYTE_POSITION(4)] & SHIFT_INDEX(15)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(3)];
-			dtd_v_blank = ((edid_data[i + BYTE_POSITION(7)] & SHIFT_INDEX(15)) << SHIFT_INDEX(8)) + edid_data[i + BYTE_POSITION(6)];
+			dtd_pixel_clk =
+				(edid_data[i + BYTE_POSITION(0)] + (edid_data[i + BYTE_POSITION(1)] << SHIFT_INDEX(8))) * CLK_UNIT;
+			dtd_h_active = ((edid_data[i + BYTE_POSITION(4)] >> SHIFT_INDEX(4)) << SHIFT_INDEX(8)) +
+						   edid_data[i + BYTE_POSITION(2)];
+			dtd_v_active = ((edid_data[i + BYTE_POSITION(7)] >> SHIFT_INDEX(4)) << SHIFT_INDEX(8)) +
+						   edid_data[i + BYTE_POSITION(5)];
+			dtd_h_blank = ((edid_data[i + BYTE_POSITION(4)] & SHIFT_INDEX(15)) << SHIFT_INDEX(8)) +
+						  edid_data[i + BYTE_POSITION(3)];
+			dtd_v_blank = ((edid_data[i + BYTE_POSITION(7)] & SHIFT_INDEX(15)) << SHIFT_INDEX(8)) +
+						  edid_data[i + BYTE_POSITION(6)];
 			dtd_h_total = dtd_h_active + dtd_h_blank;
 			dtd_v_total = dtd_v_active + dtd_v_blank;
 			dtd_refresh_rate = dtd_pixel_clk / (dtd_h_total * dtd_v_total);
@@ -433,4 +427,3 @@ static inline void get_detailed_timing_descriptor_modes(unsigned char* edid_data
 		i = (i + DTD_STANDARD_DESC_SIZE);
 	}
 }
-

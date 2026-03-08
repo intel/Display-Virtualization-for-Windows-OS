@@ -42,13 +42,9 @@ VioGpuIdr::VioGpuIdr()
 	m_IdBitMap.Buffer = NULL;
 }
 
-VioGpuIdr::~VioGpuIdr()
-{
-	Close();
-}
+VioGpuIdr::~VioGpuIdr() { Close(); }
 
-BOOLEAN VioGpuIdr::Init(
-	_In_ ULONG start)
+BOOLEAN VioGpuIdr::Init(_In_ ULONG start)
 {
 	PUCHAR buf = NULL;
 	BOOLEAN ret = FALSE;
@@ -59,9 +55,7 @@ BOOLEAN VioGpuIdr::Init(
 	Lock();
 	buf = new (NonPagedPoolNx) UCHAR[PAGE_SIZE];
 	if (buf) {
-		RtlInitializeBitMap(&m_IdBitMap,
-			(PULONG)buf,
-			CHAR_BIT * PAGE_SIZE);
+		RtlInitializeBitMap(&m_IdBitMap, (PULONG)buf, CHAR_BIT * PAGE_SIZE);
 		RtlClearAllBits(&m_IdBitMap);
 		RtlSetBits(&m_IdBitMap, 0, m_uStartIndex);
 		ret = TRUE;
@@ -70,28 +64,21 @@ BOOLEAN VioGpuIdr::Init(
 	return ret;
 }
 
-#pragma warning( disable: 28167 )
+#pragma warning(disable : 28167)
 //_IRQL_raises_(APC_LEVEL)
 //_IRQL_saves_global_(OldIrql, m_IdBitMapMutex)
-VOID VioGpuIdr::Lock(VOID)
-{
-	ExAcquireFastMutex(&m_IdBitMapMutex);
-}
+VOID VioGpuIdr::Lock(VOID) { ExAcquireFastMutex(&m_IdBitMapMutex); }
 
-#pragma warning( disable: 28167 )
+#pragma warning(disable : 28167)
 //_IRQL_requires_(APC_LEVEL)
 //_IRQL_restores_global_(OldIrql, m_IdBitMapMutex)
-VOID VioGpuIdr::Unlock(VOID)
-{
-	ExReleaseFastMutex(&m_IdBitMapMutex);
-}
+VOID VioGpuIdr::Unlock(VOID) { ExReleaseFastMutex(&m_IdBitMapMutex); }
 
 ULONG VioGpuIdr::GetId(VOID)
 {
 	ULONG id = 0;
 	Lock();
-	if (m_IdBitMap.Buffer != NULL)
-	{
+	if (m_IdBitMap.Buffer != NULL) {
 		id = RtlFindClearBitsAndSet(&m_IdBitMap, 1, 0);
 	}
 	Unlock();
@@ -106,10 +93,8 @@ VOID VioGpuIdr::PutId(ULONG id)
 	ASSERT(id <= (CHAR_BIT * PAGE_SIZE));
 	DBGPRINT("bit %d\n", id);
 	Lock();
-	if (m_IdBitMap.Buffer != NULL)
-	{
-		if (!RtlAreBitsSet(&m_IdBitMap, id, 1))
-		{
+	if (m_IdBitMap.Buffer != NULL) {
+		if (!RtlAreBitsSet(&m_IdBitMap, id, 1)) {
 			ERR("bit %d is not set\n", id - m_uStartIndex);
 		}
 		RtlClearBits(&m_IdBitMap, id, 1);
@@ -120,8 +105,7 @@ VOID VioGpuIdr::PutId(ULONG id)
 VOID VioGpuIdr::Close(VOID)
 {
 	Lock();
-	if (m_IdBitMap.Buffer != NULL)
-	{
+	if (m_IdBitMap.Buffer != NULL) {
 		delete[] m_IdBitMap.Buffer;
 		m_IdBitMap.Buffer = NULL;
 	}

@@ -41,24 +41,26 @@ EVT_WDF_DRIVER_UNLOAD DVServerKMDEvtDriverUnload;
 #define WPP_DEBUG(b) DbgPrint b
 
 #ifdef ENABLE_FRAME_TRACE
-#define PRINT_FRAME_DATA(b)		WPP_DEBUG(b)
+#define PRINT_FRAME_DATA(b) WPP_DEBUG(b)
 #else
 #define PRINT_FRAME_DATA(b)
 #endif
 
 #ifdef ENABLE_CURSOR_TRACE
-#define PRINT_CURSOR_DATA(b)	WPP_DEBUG(b)
+#define PRINT_CURSOR_DATA(b) WPP_DEBUG(b)
 #else
 #define PRINT_CURSOR_DATA(b)
 #endif
 
 #ifdef ENABLE_IMAGE_DUMP
-#define PRINT_IMAGE_DATA(b)		WPP_DEBUG(b)
+#define PRINT_IMAGE_DATA(b) WPP_DEBUG(b)
 #else
 #define PRINT_IMAGE_DATA(b)
 #endif
 
-#define IMAGE_HEX_DUMP(n) for(int x = 0; x < n; x++) PRINT_IMAGE_DATA(("%x", addr[x]))
+#define IMAGE_HEX_DUMP(n)                                                                                              \
+	for (int x = 0; x < n; x++)                                                                                        \
+	PRINT_IMAGE_DATA(("%x", addr[x]))
 
 #define DVSERVERKMD_SUCCESS 1
 #define DVSERVERKMD_FAILURE 0

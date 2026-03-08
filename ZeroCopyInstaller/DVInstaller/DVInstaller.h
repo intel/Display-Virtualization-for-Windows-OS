@@ -51,7 +51,8 @@
 #define DIUNINSTALLDRIVER "DiUninstallDriverA"
 #endif
 
-enum InstallModes {
+enum InstallModes
+{
 	INSTALL = 1,
 	UNINSTALL,
 	UPDATE,
@@ -59,12 +60,12 @@ enum InstallModes {
 	MAXMODES
 };
 
-#define EXIT_OK      (0)
-#define EXIT_FAIL  (1)
-#define EXIT_REBOOT    (2)
-#define EXIT_USAGE   (3)
-#define EXIT_UMD_INF_REMOVAL_FAILED   (4)
-#define EXIT_KMD_INF_REMOVAL_FAILED   (5)
+#define EXIT_OK (0)
+#define EXIT_FAIL (1)
+#define EXIT_REBOOT (2)
+#define EXIT_USAGE (3)
+#define EXIT_UMD_INF_REMOVAL_FAILED (4)
+#define EXIT_KMD_INF_REMOVAL_FAILED (5)
 
 #define SUCCESS 1
 #define FAIL 0
@@ -88,30 +89,21 @@ DEFINE_GUID(ClassGuid, 0x4d36e97d, 0xe325, 0x11ce, 0xbf, 0xc1, 0x08, 0x00, 0x2b,
 
 int dvPostInstall(void);
 int dvInstall(InstallModes code, BOOL dvInstallUmd);
-int dvGetInstalledOemInfFile(WCHAR*);
-int dvUninstall(WCHAR*);
-int dvGetInfPath(TCHAR* infFile, TCHAR* infPath);
-int dvLoadUnloadNewdevLib(HMODULE* newdevMod, BOOL isLoad);
+int dvGetInstalledOemInfFile(WCHAR *);
+int dvUninstall(WCHAR *);
+int dvGetInfPath(TCHAR *infFile, TCHAR *infPath);
+int dvLoadUnloadNewdevLib(HMODULE *newdevMod, BOOL isLoad);
 void dvKillDll(std::wstring moduleName);
 int dvUpdateCertifcates(void);
 BOOL dvDeviceScan(void);
-BOOL  dvGetInstalledOemInfFileName(const wchar_t* deviceDesc, WCHAR* infFileName);
+BOOL dvGetInstalledOemInfFileName(const wchar_t *deviceDesc, WCHAR *infFileName);
 BOOL dvUninstallKmdAndUmd(BOOL unInstallUmd);
 
-typedef BOOL(WINAPI* UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndParent,
-	_In_ LPCTSTR HardwareId,
-	_In_ LPCTSTR FullInfPath,
-	_In_ DWORD InstallFlags,
-	_Out_opt_ PBOOL bRebootRequired
-	);
-typedef BOOL(WINAPI* DINSTALLDRIVERProto)(_In_opt_ HWND hwndParent,
-	_In_ LPCTSTR FullInfPath,
-	_In_ DWORD InstallFlags,
-	_Out_opt_ PBOOL bRebootRequired
-	);
+typedef BOOL(WINAPI *UpdateDriverForPlugAndPlayDevicesProto)(_In_opt_ HWND hwndParent, _In_ LPCTSTR HardwareId,
+															 _In_ LPCTSTR FullInfPath, _In_ DWORD InstallFlags,
+															 _Out_opt_ PBOOL bRebootRequired);
+typedef BOOL(WINAPI *DINSTALLDRIVERProto)(_In_opt_ HWND hwndParent, _In_ LPCTSTR FullInfPath, _In_ DWORD InstallFlags,
+										  _Out_opt_ PBOOL bRebootRequired);
 
-typedef BOOL(WINAPI* DIUNINSTALLDRIVERProto)(_In_opt_ HWND hwndParent,
-	_In_ LPCTSTR InfFileName,
-	_In_ DWORD Flags,
-	PBOOL  NeedReboot
-	);
+typedef BOOL(WINAPI *DIUNINSTALLDRIVERProto)(_In_opt_ HWND hwndParent, _In_ LPCTSTR InfFileName, _In_ DWORD Flags,
+											 PBOOL NeedReboot);

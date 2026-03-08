@@ -13,31 +13,30 @@
 #include "dventry.tmh"
 
 /*******************************************************************************
-*
-* Description
-*
-* wWinMain - Entry into the dvinstaller, basically control transfer from
-*            inno setup process.
-*
-* Parameters
-*
-*
-* Return val
-* int - 0 = EXIT_OK, 1 = EXIT_FAIL
-*
-******************************************************************************/
-int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
-	_In_opt_ HINSTANCE hPrevInstance,
-	_In_ LPWSTR    lpCmdLine,
-	_In_ int       nCmdShow)
+ *
+ * Description
+ *
+ * wWinMain - Entry into the dvinstaller, basically control transfer from
+ *            inno setup process.
+ *
+ * Parameters
+ *
+ *
+ * Return val
+ * int - 0 = EXIT_OK, 1 = EXIT_FAIL
+ *
+ ******************************************************************************/
+int APIENTRY wWinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPWSTR lpCmdLine,
+					  _In_ int nCmdShow)
 {
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
 	WCHAR infFullPath[MAX_PATH];
 	InstallModes RequestedMode;
-	int result = EXIT_OK, argc, unInstallLoop = 10;;
+	int result = EXIT_OK, argc, unInstallLoop = 10;
+	;
 	LPWSTR commandline = GetCommandLine();
-	LPWSTR* argv;
+	LPWSTR *argv;
 
 	WPP_INIT_TRACING(NULL);
 	TRACING();
@@ -61,8 +60,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 		}
 		if (dvInstall(RequestedMode, FALSE)) {
 			ERR("dvInstall: Failed to %d\n", RequestedMode);
-		}
-		else {
+		} else {
 			DBGPRINT("dvInstall: succeeded to %d\n", RequestedMode);
 			result = EXIT_FAIL;
 		}
@@ -70,11 +68,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 	case UNINSTALL:
 		DBGPRINT("RequestedMode is UNINSTALL\n");
 		while (unInstallLoop--) {
-			if (dvUninstallKmdAndUmd(TRUE))	{
+			if (dvUninstallKmdAndUmd(TRUE)) {
 				DBGPRINT("dvUninstallKmdAndUmd succeeded to uninstall in interation =  %d\n", unInstallLoop);
 				break;
-			}
-			else {
+			} else {
 				ERR("dvUninstallKmdAndUmd Failed to uninstall in iteration = %d\n", unInstallLoop);
 				Sleep(1000);
 			}
@@ -90,13 +87,11 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
 			}
 			if (dvInstall(INSTALL, FALSE)) {
 				ERR("UNINSTALLANDUPDATE Failed to update\n");
-			}
-			else {
+			} else {
 				DBGPRINT("UNINSTALLANDUPDATE  Succeded to update\n");
 				result = EXIT_OK;
 			}
-		}
-		else {
+		} else {
 			ERR("dvUninstallKmdAndUmd Failed to uninstall before update\n");
 		}
 		break;

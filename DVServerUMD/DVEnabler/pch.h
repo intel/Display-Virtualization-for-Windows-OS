@@ -12,18 +12,19 @@
 #include <vector>
 
 /* DVENABLER Error Codes */
-#define DVENABLER_SUCCESS        0
-#define DVENABLER_FAILURE        -1
+#define DVENABLER_SUCCESS 0
+#define DVENABLER_FAILURE -1
 
-#define HOTPLUG_EVENT			L"Global\\HOTPLUG_EVENT"
-#define DVE_EVENT				L"Global\\DVE_EVENT"
-#define DISP_INFO				L"Global\\DISP_INFO"
-#define DELAY_TIME				50
+#define HOTPLUG_EVENT L"Global\\HOTPLUG_EVENT"
+#define DVE_EVENT L"Global\\DVE_EVENT"
+#define DISP_INFO L"Global\\DISP_INFO"
+#define DELAY_TIME 50
 int dvenabler_init();
-struct disp_info {
+struct disp_info
+{
 	int disp_count;
 	HANDLE mutex;
 };
-int GetDisplayCount(disp_info* pdinfo);
+int GetDisplayCount(disp_info *pdinfo);
 int IsSystemLocked();
-#endif //PCH_H
+#endif // PCH_H

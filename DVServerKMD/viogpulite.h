@@ -53,8 +53,8 @@ typedef struct
 
 typedef struct _CURRENT_MODE
 {
-	DXGK_DISPLAY_INFORMATION             DispInfo;
-	D3DKMDT_VIDPN_PRESENT_PATH_ROTATION  Rotation;
+	DXGK_DISPLAY_INFORMATION DispInfo;
+	D3DKMDT_VIDPN_PRESENT_PATH_ROTATION Rotation;
 	D3DKMDT_VIDPN_PRESENT_PATH_SCALING Scaling;
 	UINT SrcModeWidth;
 	UINT SrcModeHeight;
@@ -74,12 +74,13 @@ typedef struct _CURRENT_MODE
 
 	union
 	{
-		VOID* Ptr;
-		ULONG64                          Force8Bytes;
+		VOID *Ptr;
+		ULONG64 Force8Bytes;
 	} FrameBuffer;
 } CURRENT_MODE;
 
-typedef struct _POINTER_SHAPE {
+typedef struct _POINTER_SHAPE
+{
 	UINT X;
 	UINT Y;
 	DXGKARG_SETPOINTERSHAPE pointer;
@@ -131,95 +132,85 @@ private:
 	UINT m_FrontBufferIndex;
 };
 
-class IVioGpuAdapterLite {
+class IVioGpuAdapterLite
+{
 public:
-	IVioGpuAdapterLite(_In_ PVOID pvDevcieContext) { m_pvDeviceContext = pvDevcieContext; m_bEDID = FALSE; m_Id = 0; RtlZeroMemory(&m_screen_mutex, sizeof(m_screen_mutex));
+	IVioGpuAdapterLite(_In_ PVOID pvDevcieContext)
+	{
+		m_pvDeviceContext = pvDevcieContext;
+		m_bEDID = FALSE;
+		m_Id = 0;
+		RtlZeroMemory(&m_screen_mutex, sizeof(m_screen_mutex));
 	}
 	virtual ~IVioGpuAdapterLite(void) { ; }
 	virtual NTSTATUS SetPowerState(DEVICE_POWER_STATE DevicePowerState) = 0;
-	virtual NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION* pDispInfo) = 0;
+	virtual NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION *pDispInfo) = 0;
 	virtual NTSTATUS HWClose(void) = 0;
-	virtual BOOLEAN InterruptRoutine(_In_  ULONG MessageNumber) = 0;
+	virtual BOOLEAN InterruptRoutine(_In_ ULONG MessageNumber) = 0;
 	virtual VOID DpcRoutine(void) = 0;
 	virtual VOID ResetDevice(void) = 0;
-	virtual VOID BlackOutScreen(CURRENT_MODE* pCurrentMod) = 0;
-	virtual NTSTATUS SetPointerShape(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf, _In_ CONST UINT cv) = 0;
-	virtual NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition) = 0;
+	virtual VOID BlackOutScreen(CURRENT_MODE *pCurrentMod) = 0;
+	virtual NTSTATUS SetPointerShape(_In_ CONST POINTER_SHAPE *pSetPointerShape, _In_ CONST UINT cf,
+									 _In_ CONST UINT cv) = 0;
+	virtual NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION *pSetPointerPosition) = 0;
 	ULONG GetInstanceId(void) { return m_Id; }
 	PVOID GetVioGpu(void) { return m_pvDeviceContext; }
 	virtual PBYTE GetEdidData(UINT Idx) = 0;
 	virtual PHYSICAL_ADDRESS GetFrameBufferPA(void) = 0;
-	DXGK_DISPLAY_INFORMATION DisplayInfo = {
-	1024,
-	768,
-	4096,
-	D3DDDIFMT_X8R8G8B8,
-	0,
-	0,
-	0
-	};
+	DXGK_DISPLAY_INFORMATION DisplayInfo = {1024, 768, 4096, D3DDDIFMT_X8R8G8B8, 0, 0, 0};
+
 protected:
-	virtual NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo) = 0;
+	virtual NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION *pDispInfo) = 0;
+
 protected:
-	ULONG  m_Id;
+	ULONG m_Id;
 	ScreenInfo m_screen[MAX_SCAN_OUT];
 	BOOLEAN m_bEDID;
 	KMUTEX m_screen_mutex;
+
 public:
 	PVOID m_pvDeviceContext;
 };
 
-class VioGpuAdapterLite :
-	public IVioGpuAdapterLite
+class VioGpuAdapterLite : public IVioGpuAdapterLite
 {
 public:
 	VioGpuAdapterLite(_In_ PVOID pvDeviceContext);
 	~VioGpuAdapterLite(void);
-	NTSTATUS SetCurrentModeExt(CURRENT_MODE* pCurrentMode);
+	NTSTATUS SetCurrentModeExt(CURRENT_MODE *pCurrentMode);
 	NTSTATUS SetPowerState(DEVICE_POWER_STATE DevicePowerState);
-	NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION* pDispInfo);
+	NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION *pDispInfo);
 	NTSTATUS HWClose(void);
-	NTSTATUS ExecutePresentDisplayZeroCopy(_In_ BYTE* SrcAddr,
-		_In_ UINT               SrcBytesPerPixel,
-		_In_ LONG               SrcPitch,
-		_In_ UINT               SrcWidth,
-		_In_ UINT               SrcHeight,
-		_In_ UINT               ScreenNum,
-		_In_ UINT               Stride);
-	VOID BlackOutScreen(CURRENT_MODE* pCurrentMod);
-	BOOLEAN InterruptRoutine(_In_  ULONG MessageNumber);
+	NTSTATUS ExecutePresentDisplayZeroCopy(_In_ BYTE *SrcAddr, _In_ UINT SrcBytesPerPixel, _In_ LONG SrcPitch,
+										   _In_ UINT SrcWidth, _In_ UINT SrcHeight, _In_ UINT ScreenNum,
+										   _In_ UINT Stride);
+	VOID BlackOutScreen(CURRENT_MODE *pCurrentMod);
+	BOOLEAN InterruptRoutine(_In_ ULONG MessageNumber);
 	VOID DpcRoutine(void);
 	VOID ResetDevice(VOID);
-	NTSTATUS SetPointerShape(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf, _In_ CONST UINT cv);
-	NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION* pSetPointerPosition);
-	CPciResources* GetPciResources(void) { return &m_PciResources; }
+	NTSTATUS SetPointerShape(_In_ CONST POINTER_SHAPE *pSetPointerShape, _In_ CONST UINT cf, _In_ CONST UINT cv);
+	NTSTATUS SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION *pSetPointerPosition);
+	CPciResources *GetPciResources(void) { return &m_PciResources; }
 	BOOLEAN IsMSIEnabled() { return m_PciResources.IsMSIEnabled(); }
-	PHYSICAL_ADDRESS GetFrameBufferPA(void) { return  m_PciResources.GetPciBar(0)->GetPA(); }
+	PHYSICAL_ADDRESS GetFrameBufferPA(void) { return m_PciResources.GetPciBar(0)->GetPA(); }
 	NTSTATUS IoDeviceControl();
-	BOOLEAN IsHardwareInit() const
-	{
-		return m_Flags.HardwareInit;
-	}
+	BOOLEAN IsHardwareInit() const { return m_Flags.HardwareInit; }
 	UINT32 GetNumScreens() { return m_u32NumScanouts; }
 	UINT32 GetModeListSize(UINT32 screen_num) { return m_screen[screen_num].mode_list.modelist_size; }
-	VOID CopyResolution(UINT32 screen_num, struct edid_info* edata);
+	VOID CopyResolution(UINT32 screen_num, struct edid_info *edata);
 	PVOID GetFbVAddr(UINT32 screen_num) { return m_screen[screen_num].m_FrameSegment.GetFbVAddr(); }
 	VOID Close(UINT32 screen_num) { m_screen[screen_num].m_FrameSegment.Close(); }
 	PBYTE GetEdidData(UINT Idx);
-	VOID FillPresentStatus(struct hp_info* info);
+	VOID FillPresentStatus(struct hp_info *info);
 	VOID SetEvent(HANDLE event);
 	void DestroyFrameBufferCursorObjExt();
 	void DisableInterruptExt();
 
 private:
-
-	void SetHardwareInit(BOOLEAN init)
-	{
-		m_Flags.HardwareInit = init;
-	}
+	void SetHardwareInit(BOOLEAN init) { m_Flags.HardwareInit = init; }
 	NTSTATUS VioGpuAdapterLiteInit();
 	void VioGpuAdapterLiteClose(void);
-	NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION* pDispInfo);
+	NTSTATUS GetModeList(DXGK_DISPLAY_INFORMATION *pDispInfo);
 	BOOLEAN AckFeature(UINT64 Feature);
 	BOOLEAN GetDisplayInfo(UINT32 screen_num);
 	void ProcessEdid(UINT32 screen_num);
@@ -230,7 +221,7 @@ private:
 	void DestroyFrameBufferObj(VioGpuObj** ppFbuf, BOOLEAN bReset);
 	BOOLEAN CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf);
 	void DestroyCursor(UINT32 screen_num);
-	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj* obj, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
+	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj *obj, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
 	void static ThreadWork(_In_ PVOID Context);
 	void ThreadWorkRoutine(void);
 	void ConfigChanged(void);
@@ -254,4 +245,3 @@ private:
 	BOOLEAN m_bBlobSupported;
 	PKEVENT hpd_event;
 };
-

@@ -7,7 +7,8 @@ Abstract:
 	This module contains a sample implementation of an indirect display driver. See the included README.md file and the
 	various TODO blocks throughout this file and all accompanying files for information on building a production driver.
 
-	MSDN documentation on indirect displays can be found at https://msdn.microsoft.com/en-us/library/windows/hardware/mt761968(v=vs.85).aspx.
+	MSDN documentation on indirect displays can be found at
+https://msdn.microsoft.com/en-us/library/windows/hardware/mt761968(v=vs.85).aspx.
 
 Environment:
 
@@ -28,52 +29,52 @@ Environment:
 #include <SetupAPI.h>
 #include <initguid.h>
 
-#pragma comment (lib, "Setupapi.lib")
+#pragma comment(lib, "Setupapi.lib")
 
 using namespace std;
 using namespace Microsoft::IndirectDisp;
 using namespace Microsoft::WRL;
 
-//DVServer KMD related
-DeviceInfo* g_DevInfo;
+// DVServer KMD related
+DeviceInfo *g_DevInfo;
 UINT g_DevInfoCounter = 0;
 BOOL g_init_kmd_resources = TRUE;
-struct hp_info* g_hdata = NULL;
+struct hp_info *g_hdata = NULL;
 ULONG g_bytesReturned = 0;
 HANDLE g_hpdthread_handle = NULL;
 
-IDDCX_MONITOR g_monitorobject_list[MAX_SCAN_OUT] = { 0 };
+IDDCX_MONITOR g_monitorobject_list[MAX_SCAN_OUT] = {0};
 
 BOOL hwcursorsupported = TRUE;
 
 #pragma region SampleMonitors
 
 DWORD dvserver_monitor_count = 1;
-IndirectSampleMonitor* g_monitors = NULL;
+IndirectSampleMonitor *g_monitors = NULL;
 
 // Default modes reported for edid-less monitors. The first mode is set as preferred
-static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultModes[] =
-{
-	{ 1920, 1080, 60 },
-	{ 1600,  900, 60 },
-	{ 1024,  768, 75 },
+static const struct IndirectSampleMonitor::SampleMonitorMode s_SampleDefaultModes[] = {
+	{1920, 1080, 60},
+	{1600, 900, 60},
+	{1024, 768, 75},
 };
 
-IDDCX_MONITOR g_DvserverCxMonitorObject[MAX_SCAN_OUT] = { 0 };
-IDARG_IN_QUERY_HWCURSOR g_inputargs[MAX_SCAN_OUT] = { 0 };
+IDDCX_MONITOR g_DvserverCxMonitorObject[MAX_SCAN_OUT] = {0};
+IDARG_IN_QUERY_HWCURSOR g_inputargs[MAX_SCAN_OUT] = {0};
 Microsoft::WRL::Wrappers::Event g_dvserver_cursor_os_event[MAX_SCAN_OUT];
 
-#define CURSOR_BUFFER_SIZE				128*128*4*8 // 128x128 RGBA cursor, 8 bits per pixel
-#define CURSOR_MAX_WIDTH				128
-#define CURSOR_MAX_HEIGHT				128
-#define INITIAL_CURSOR_SHAPE_ID			0
-#define DVSERVER_CURSOREVENT_WAIT_TIMEOUT	16 // 16ms wait timeout for the IDD cursor event
+#define CURSOR_BUFFER_SIZE 128 * 128 * 4 * 8 // 128x128 RGBA cursor, 8 bits per pixel
+#define CURSOR_MAX_WIDTH 128
+#define CURSOR_MAX_HEIGHT 128
+#define INITIAL_CURSOR_SHAPE_ID 0
+#define DVSERVER_CURSOREVENT_WAIT_TIMEOUT 16 // 16ms wait timeout for the IDD cursor event
 
 #pragma endregion
 
 #pragma region helpers
 
-static inline void FillSignalInfo(DISPLAYCONFIG_VIDEO_SIGNAL_INFO& Mode, DWORD Width, DWORD Height, DWORD VSync, bool bMonitorMode)
+static inline void FillSignalInfo(DISPLAYCONFIG_VIDEO_SIGNAL_INFO &Mode, DWORD Width, DWORD Height, DWORD VSync,
+								  bool bMonitorMode)
 {
 	Mode.totalSize.cx = Mode.activeSize.cx = Width;
 	Mode.totalSize.cy = Mode.activeSize.cy = Height;
@@ -92,7 +93,8 @@ static inline void FillSignalInfo(DISPLAYCONFIG_VIDEO_SIGNAL_INFO& Mode, DWORD W
 	Mode.pixelRate = ((UINT64)VSync) * ((UINT64)Width) * ((UINT64)Height);
 }
 
-static IDDCX_MONITOR_MODE CreateIddCxMonitorMode(DWORD Width, DWORD Height, DWORD VSync, IDDCX_MONITOR_MODE_ORIGIN Origin = IDDCX_MONITOR_MODE_ORIGIN_DRIVER)
+static IDDCX_MONITOR_MODE CreateIddCxMonitorMode(DWORD Width, DWORD Height, DWORD VSync,
+												 IDDCX_MONITOR_MODE_ORIGIN Origin = IDDCX_MONITOR_MODE_ORIGIN_DRIVER)
 {
 	IDDCX_MONITOR_MODE Mode = {};
 
@@ -134,7 +136,7 @@ EVT_IDD_CX_MONITOR_UNASSIGN_SWAPCHAIN DVServerUMDMonitorUnassignSwapChain;
 
 struct IndirectDeviceContextWrapper
 {
-	IndirectDeviceContext* pContext;
+	IndirectDeviceContext *pContext;
 
 	void Cleanup()
 	{
@@ -150,7 +152,7 @@ struct IndirectDeviceContextWrapper
 
 struct IndirectMonitorContextWrapper
 {
-	IndirectMonitorContext* pContext;
+	IndirectMonitorContext *pContext;
 
 	void Cleanup()
 	{
@@ -164,10 +166,7 @@ WDF_DECLARE_CONTEXT_TYPE(IndirectDeviceContextWrapper);
 
 WDF_DECLARE_CONTEXT_TYPE(IndirectMonitorContextWrapper);
 
-extern "C" BOOL WINAPI DllMain(
-	_In_ HINSTANCE hInstance,
-	_In_ UINT dwReason,
-	_In_opt_ LPVOID lpReserved)
+extern "C" BOOL WINAPI DllMain(_In_ HINSTANCE hInstance, _In_ UINT dwReason, _In_opt_ LPVOID lpReserved)
 {
 	UNREFERENCED_PARAMETER(hInstance);
 	UNREFERENCED_PARAMETER(lpReserved);
@@ -176,11 +175,7 @@ extern "C" BOOL WINAPI DllMain(
 	return TRUE;
 }
 
-_Use_decl_annotations_
-extern "C" NTSTATUS DriverEntry(
-	PDRIVER_OBJECT  pDriverObject,
-	PUNICODE_STRING pRegistryPath
-)
+_Use_decl_annotations_ extern "C" NTSTATUS DriverEntry(PDRIVER_OBJECT pDriverObject, PUNICODE_STRING pRegistryPath)
 {
 	WDF_DRIVER_CONFIG Config;
 	NTSTATUS Status;
@@ -191,13 +186,10 @@ extern "C" NTSTATUS DriverEntry(
 	WDF_OBJECT_ATTRIBUTES Attributes;
 	WDF_OBJECT_ATTRIBUTES_INIT(&Attributes);
 
-	WDF_DRIVER_CONFIG_INIT(&Config,
-		DVServerUMDDeviceAdd
-	);
+	WDF_DRIVER_CONFIG_INIT(&Config, DVServerUMDDeviceAdd);
 	Config.EvtDriverUnload = DVServerUMDUnload;
 	Status = WdfDriverCreate(pDriverObject, pRegistryPath, &Attributes, &Config, WDF_NO_HANDLE);
-	if (!NT_SUCCESS(Status))
-	{
+	if (!NT_SUCCESS(Status)) {
 		WPP_CLEANUP(pDriverObject);
 		return Status;
 	}
@@ -206,20 +198,19 @@ extern "C" NTSTATUS DriverEntry(
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* OnDriverUnload is called by the framework when the driver unloads.
-*
-* Parameters
-*   Driver - Handle to a framework driver object created in DriverEntry.
-*
-* Return val
-*   Null
-*
-******************************************************************************/
-_Use_decl_annotations_
-VOID DVServerUMDUnload(WDFDRIVER Driver)
+ *
+ * Description
+ *
+ * OnDriverUnload is called by the framework when the driver unloads.
+ *
+ * Parameters
+ *   Driver - Handle to a framework driver object created in DriverEntry.
+ *
+ * Return val
+ *   Null
+ *
+ ******************************************************************************/
+_Use_decl_annotations_ VOID DVServerUMDUnload(WDFDRIVER Driver)
 {
 
 	UNREFERENCED_PARAMETER(Driver);
@@ -227,8 +218,7 @@ VOID DVServerUMDUnload(WDFDRIVER Driver)
 
 	return;
 }
-_Use_decl_annotations_
-NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
+_Use_decl_annotations_ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 {
 	NTSTATUS Status = STATUS_SUCCESS;
 	WDF_PNPPOWER_EVENT_CALLBACKS PnpPowerCallbacks;
@@ -261,34 +251,30 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	DVServerConfig.EvtIddCxMonitorUnassignSwapChain = DVServerUMDMonitorUnassignSwapChain;
 
 	Status = IddCxDeviceInitConfig(pDeviceInit, &DVServerConfig);
-	if (!NT_SUCCESS(Status))
-	{
+	if (!NT_SUCCESS(Status)) {
 		return Status;
 	}
 
 	WDF_OBJECT_ATTRIBUTES Attr;
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectDeviceContextWrapper);
-	Attr.EvtCleanupCallback = [](WDFOBJECT Object)
-	{
+	Attr.EvtCleanupCallback = [](WDFOBJECT Object) {
 		// Automatically cleanup the context when the WDF object is about to be deleted
-		auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Object);
-		if (pContext)
-		{
+		auto *pContext = WdfObjectGet_IndirectDeviceContextWrapper(Object);
+		if (pContext) {
 			pContext->Cleanup();
 		}
 	};
 
 	WDFDEVICE Device = nullptr;
 	Status = WdfDeviceCreate(&pDeviceInit, &Attr, &Device);
-	if (!NT_SUCCESS(Status))
-	{
+	if (!NT_SUCCESS(Status)) {
 		return Status;
 	}
 
 	Status = IddCxDeviceInitialize(Device);
 
 	// Create a new device context object and attach it to the WDF device object
-	auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
+	auto *pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
 	pContext->pContext = new IndirectDeviceContext(Device);
 
 	status_ver = IddCxGetVersion(&pOutArgs);
@@ -299,15 +285,14 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	g_DevInfo = new DeviceInfo();
 
 	dvserver_monitor_count = get_total_screens(g_DevInfo->get_Handle());
-	if ((dvserver_monitor_count == DVSERVERUMD_FAILURE) || \
-		(dvserver_monitor_count > MAX_MONITOR_SUPPORTED)) {
+	if ((dvserver_monitor_count == DVSERVERUMD_FAILURE) || (dvserver_monitor_count > MAX_MONITOR_SUPPORTED)) {
 		ERR("Failed to get total screens from KMD");
 		return DVSERVERUMD_FAILURE;
 	}
 
 	try {
 		g_monitors = new IndirectSampleMonitor[dvserver_monitor_count];
-	} catch(const std::bad_alloc e){
+	} catch (const std::bad_alloc e) {
 		ERR("Dynamic memory allocation failure");
 		return DVSERVERUMD_FAILURE;
 	}
@@ -315,15 +300,14 @@ NTSTATUS DVServerUMDDeviceAdd(WDFDRIVER Driver, PWDFDEVICE_INIT pDeviceInit)
 	return Status;
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDDeviceD0Entry(WDFDEVICE Device, WDF_POWER_DEVICE_STATE PreviousState)
+_Use_decl_annotations_ NTSTATUS DVServerUMDDeviceD0Entry(WDFDEVICE Device, WDF_POWER_DEVICE_STATE PreviousState)
 {
 	UNREFERENCED_PARAMETER(PreviousState);
 	TRACING();
 
 	// This function is called by WDF to start the device in the fully-on power state.
 
-	auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
+	auto *pContext = WdfObjectGet_IndirectDeviceContextWrapper(Device);
 	pContext->pContext->InitAdapter(PreviousState);
 
 	return STATUS_SUCCESS;
@@ -357,15 +341,9 @@ NTSTATUS DVServerUMDDeviceD0Exit(WDFDEVICE Device, WDF_POWER_DEVICE_STATE Target
 
 #pragma region Direct3DDevice
 
-Direct3DDevice::Direct3DDevice(LUID AdapterLuid) : AdapterLuid(AdapterLuid)
-{
+Direct3DDevice::Direct3DDevice(LUID AdapterLuid) : AdapterLuid(AdapterLuid) {}
 
-}
-
-Direct3DDevice::Direct3DDevice()
-{
-	AdapterLuid = LUID{};
-}
+Direct3DDevice::Direct3DDevice() { AdapterLuid = LUID{}; }
 
 HRESULT Direct3DDevice::Init()
 {
@@ -373,24 +351,22 @@ HRESULT Direct3DDevice::Init()
 	// The DXGI factory could be cached, but if a new render adapter appears on the system, a new factory needs to be
 	// created. If caching is desired, check DxgiFactory->IsCurrent() each time and recreate the factory if !IsCurrent.
 	HRESULT hr = CreateDXGIFactory2(0, IID_PPV_ARGS(&DxgiFactory));
-	if (FAILED(hr))
-	{
+	if (FAILED(hr)) {
 		ERR("CreateDXGIFactory2 failed\n");
 		return hr;
 	}
 
 	// Find the specified render adapter
 	hr = DxgiFactory->EnumAdapterByLuid(AdapterLuid, IID_PPV_ARGS(&Adapter));
-	if (FAILED(hr))
-	{
+	if (FAILED(hr)) {
 		ERR("EnumAdapterByLuid failed\n");
 		return hr;
 	}
 
 	// Create a D3D device using the render adapter. BGRA support is required by the WHQL test suite.
-	hr = D3D11CreateDevice(Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0, D3D11_SDK_VERSION, &Device, nullptr, &DeviceContext);
-	if (FAILED(hr))
-	{
+	hr = D3D11CreateDevice(Adapter.Get(), D3D_DRIVER_TYPE_UNKNOWN, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr,
+						   0, D3D11_SDK_VERSION, &Device, nullptr, &DeviceContext);
+	if (FAILED(hr)) {
 		// If creating the D3D device failed, it's possible the render GPU was lost (e.g. detachable GPU) or else the
 		// system is in a transient state.
 		ERR("D3D11CreateDevice failed\n");
@@ -412,7 +388,7 @@ DeviceInfo::DeviceInfo()
 		return;
 	}
 	// ****** Frame Resources ******
-	//Create Device frame Handle to DVServerKMD
+	// Create Device frame Handle to DVServerKMD
 	devHandle_frame = CreateFile(device_iface_data->DevicePath, 0, 0, NULL, OPEN_EXISTING, 0, 0);
 	if (devHandle_frame == INVALID_HANDLE_VALUE) {
 		ERR("CreateFile for Frame returned INVALID_HANDLE_VALUE\n");
@@ -439,19 +415,19 @@ DeviceInfo::~DeviceInfo()
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* get_dvserver_kmdf_device - This function checks for the DVserverKMD device
-* created and opens a handle for DVserverUMD to use
-*
-* Parameters
-* Null
-*
-* Return val
-* int - 0 == SUCCESS, -1 = ERROR
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * get_dvserver_kmdf_device - This function checks for the DVserverKMD device
+ * created and opens a handle for DVserverUMD to use
+ *
+ * Parameters
+ * Null
+ *
+ * Return val
+ * int - 0 == SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
 int DeviceInfo::get_dvserver_kmdf_device()
 {
 	DWORD sizeof_deviceinterface_buf = 0;
@@ -481,7 +457,8 @@ int DeviceInfo::get_dvserver_kmdf_device()
 	}
 
 	device_iface_data->cbSize = sizeof(SP_DEVICE_INTERFACE_DETAIL_DATA);
-	ret = SetupDiGetDeviceInterfaceDetail(devinfo_handle, &device_interface_data, device_iface_data, sizeof_deviceinterface_buf, 0, 0);
+	ret = SetupDiGetDeviceInterfaceDetail(devinfo_handle, &device_interface_data, device_iface_data,
+										  sizeof_deviceinterface_buf, 0, 0);
 	if (ret == FALSE) {
 		ERR("etupDiGetDeviceInterfaceDetail Failed\nn");
 		free(device_iface_data);
@@ -496,8 +473,10 @@ int DeviceInfo::get_dvserver_kmdf_device()
 
 #pragma region SwapChainProcessor
 
-SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Direct3DDevice> Device, HANDLE NewFrameEvent, UINT MonitorIndex)
-	: m_hSwapChain(hSwapChain), m_Device(std::move(Device)), m_hAvailableBufferEvent(NewFrameEvent), m_screen_num(0), print_counter(0)
+SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Direct3DDevice> Device,
+									   HANDLE NewFrameEvent, UINT MonitorIndex)
+	: m_hSwapChain(hSwapChain), m_Device(std::move(Device)), m_hAvailableBufferEvent(NewFrameEvent), m_screen_num(0),
+	  print_counter(0)
 {
 	init();
 	TRACING();
@@ -508,15 +487,15 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 		m_hTerminateCursorEvent.Attach(CreateEvent(nullptr, FALSE, FALSE, nullptr));
 	}
 
-	//Allocate memory for IOCTL Response Buffer from DVServerKMD (for frame)
-	m_ioctlresp_frame = (struct KMDF_IOCTL_Response*)malloc(sizeof(struct KMDF_IOCTL_Response));
+	// Allocate memory for IOCTL Response Buffer from DVServerKMD (for frame)
+	m_ioctlresp_frame = (struct KMDF_IOCTL_Response *)malloc(sizeof(struct KMDF_IOCTL_Response));
 	if (m_ioctlresp_frame == NULL) {
 		ERR("Failed allocating IOCTL Response structure (for frame)\n");
 		goto exit;
 	}
 
-	//Allocate memory for FrameMeta Data pointer
-	m_framedata = (struct FrameMetaData*)malloc(sizeof(struct FrameMetaData));
+	// Allocate memory for FrameMeta Data pointer
+	m_framedata = (struct FrameMetaData *)malloc(sizeof(struct FrameMetaData));
 	if (m_framedata == NULL) {
 		ERR("Failed allocating frame metadata structure\n");
 		goto exit;
@@ -534,27 +513,25 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 	// Immediately create and run the swap-chain processing thread, passing 'this' as the thread parameter
 	m_hThread.Attach(CreateThread(nullptr, 0, RunThread, this, 0, nullptr));
 
-
 	if (hwcursorsupported == TRUE) {
 		// ****** Cursor Resources ******
-		//Allocate memory for IOCTL Response Buffer from DVServerKMD (for cursor)
-		m_ioctlresp_cursor = (struct KMDF_IOCTL_Response*)malloc(sizeof(struct KMDF_IOCTL_Response));
+		// Allocate memory for IOCTL Response Buffer from DVServerKMD (for cursor)
+		m_ioctlresp_cursor = (struct KMDF_IOCTL_Response *)malloc(sizeof(struct KMDF_IOCTL_Response));
 		if (m_ioctlresp_cursor == NULL) {
 			ERR("Failed allocating IOCTL Response structure (for cursor) !!!\n");
 			goto exit;
 		}
 
-		//Allocate memory for Cursor Data pointer
-		m_cursordata = (struct CursorData*)malloc(sizeof(struct CursorData));
+		// Allocate memory for Cursor Data pointer
+		m_cursordata = (struct CursorData *)malloc(sizeof(struct CursorData));
 		if (m_cursordata == NULL) {
 			ERR("Failed allocating cursor structure !!!\n");
 			goto exit;
 		}
 
-		//Create DVServer Cursor Thread
+		// Create DVServer Cursor Thread
 		m_hCursorThread.Attach(CreateThread(nullptr, 0, CursorThread, this, 0, nullptr));
 	}
-
 
 	DBGPRINT("Init Resources Successful - Thread Creation Success !!!\n");
 	return;
@@ -571,8 +548,7 @@ SwapChainProcessor::~SwapChainProcessor()
 		SetEvent(m_hTerminateCursorEvent.Get());
 	}
 
-	if (m_hCursorThread.Get())
-	{
+	if (m_hCursorThread.Get()) {
 		// Wait for the thread to terminate
 		WaitForSingleObject(m_hCursorThread.Get(), INFINITE);
 	}
@@ -580,32 +556,30 @@ SwapChainProcessor::~SwapChainProcessor()
 	// Alert the swap-chain processing thread to terminate
 	SetEvent(m_hTerminateEvent.Get());
 
-
-	if (m_hThread.Get())
-	{
+	if (m_hThread.Get()) {
 		// Wait for the thread to terminate
 		WaitForSingleObject(m_hThread.Get(), INFINITE);
 	}
 
-	//Cleanup other supporting resources
+	// Cleanup other supporting resources
 	cleanup_resources();
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* cleanup_resources - Once the SwapChain stops processing the frames,
-* this function will close the DVServer device handle and releases the
-* assigned frame metadata and IOCTL
-*
-* Parameters
-* Null
-*
-* Return val
-* Null
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * cleanup_resources - Once the SwapChain stops processing the frames,
+ * this function will close the DVServer device handle and releases the
+ * assigned frame metadata and IOCTL
+ *
+ * Parameters
+ * Null
+ *
+ * Return val
+ * Null
+ *
+ ******************************************************************************/
 void SwapChainProcessor::cleanup_resources()
 {
 	TRACING();
@@ -651,24 +625,24 @@ void SwapChainProcessor::cleanup_resources()
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* init - This function will initialize the frame related variables
-*
-* Parameters
-* Null
-*
-* Return val
-* Null
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * init - This function will initialize the frame related variables
+ *
+ * Parameters
+ * Null
+ *
+ * Return val
+ * Null
+ *
+ ******************************************************************************/
 void SwapChainProcessor::init()
 {
 	g_init_kmd_resources = TRUE;
 	m_resolution_changed = TRUE;
 
-	//Frame related
+	// Frame related
 	m_width = 0;
 	m_height = 0;
 	m_pitch = 0;
@@ -679,7 +653,7 @@ void SwapChainProcessor::init()
 	m_ioctlresp_frame = NULL;
 	m_destimage = NULL;
 	m_IAcquiredDesktopImage = NULL;
-	m_frame_statistics_counter = 1; //init the frame statistics counter
+	m_frame_statistics_counter = 1; // init the frame statistics counter
 	m_staging_buffer.pData = NULL;
 	m_staging_buffer.DepthPitch = 0;
 	m_staging_buffer.RowPitch = 0;
@@ -689,19 +663,19 @@ void SwapChainProcessor::init()
 	m_cursordata = NULL;
 }
 
-
 DWORD CALLBACK SwapChainProcessor::CursorThread(LPVOID Argument)
 {
-	//Setting the cursor thread priority to HIGH; Runcore thread will get more priority from OS, inorder to see smooth cursor movement 
-	//we are rasing the cursor thread priority to HIGH and we will be waiting for OS to send cursor events 
-	reinterpret_cast<SwapChainProcessor*>(Argument)->GetCursorData();
+	// Setting the cursor thread priority to HIGH; Runcore thread will get more priority from OS, inorder to see smooth
+	// cursor movement we are rasing the cursor thread priority to HIGH and we will be waiting for OS to send cursor
+	// events
+	reinterpret_cast<SwapChainProcessor *>(Argument)->GetCursorData();
 
 	return 0;
 }
 
 DWORD CALLBACK SwapChainProcessor::RunThread(LPVOID Argument)
 {
-	reinterpret_cast<SwapChainProcessor*>(Argument)->Run();
+	reinterpret_cast<SwapChainProcessor *>(Argument)->Run();
 	return 0;
 }
 
@@ -733,8 +707,7 @@ void SwapChainProcessor::RunCore()
 	TRACING();
 
 	HRESULT hr = m_Device->Device.As(&DxgiDevice);
-	if (FAILED(hr))
-	{
+	if (FAILED(hr)) {
 		ERR("Device.As failed\n");
 		return;
 	}
@@ -743,10 +716,8 @@ void SwapChainProcessor::RunCore()
 	SetDevice.pDevice = DxgiDevice.Get();
 
 	hr = IddCxSwapChainSetDevice(m_hSwapChain, &SetDevice);
-	if (FAILED(hr))
-	{
-		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr,
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+	if (FAILED(hr)) {
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 		ERR("IddCxSwapChainSetDevice failed, screen = %d, err = %s\n", m_screen_num, err);
 		return;
 	}
@@ -757,33 +728,32 @@ void SwapChainProcessor::RunCore()
 		DBGPRINT("No GPU PCI Device ID found.\n");
 
 	switch (gpuDeviceId) {
-		case DEV_ID_7D40:
-		case DEV_ID_7D45:
-		case DEV_ID_7D55:
-		case DEV_ID_7D60:
-		case DEV_ID_7D67:
-		case DEV_ID_7DD5:
-			DBGPRINT("IddCxSetRealtimeGPUPriority skipped");
-			break;
-		default:
-			DBGPRINT("IddCxSetRealtimeGPUPriority engaged");
-			if (IDD_IS_FUNCTION_AVAILABLE(IddCxSetRealtimeGPUPriority)) {
-				IDARG_IN_SETREALTIMEGPUPRIORITY SetPriority = {};
-				SetPriority.pDevice = DxgiDevice.Get();
-				hr = IddCxSetRealtimeGPUPriority(m_hSwapChain, &SetPriority);
-				if (FAILED(hr)) {
-					ERR("IddCxSetRealtimeGPUPriority failed\n");
-				}
+	case DEV_ID_7D40:
+	case DEV_ID_7D45:
+	case DEV_ID_7D55:
+	case DEV_ID_7D60:
+	case DEV_ID_7D67:
+	case DEV_ID_7DD5:
+		DBGPRINT("IddCxSetRealtimeGPUPriority skipped");
+		break;
+	default:
+		DBGPRINT("IddCxSetRealtimeGPUPriority engaged");
+		if (IDD_IS_FUNCTION_AVAILABLE(IddCxSetRealtimeGPUPriority)) {
+			IDARG_IN_SETREALTIMEGPUPRIORITY SetPriority = {};
+			SetPriority.pDevice = DxgiDevice.Get();
+			hr = IddCxSetRealtimeGPUPriority(m_hSwapChain, &SetPriority);
+			if (FAILED(hr)) {
+				ERR("IddCxSetRealtimeGPUPriority failed\n");
 			}
-			break;
 		}
+		break;
+	}
 
-	//reset the resolution flag whenever there is a resolution change
+	// reset the resolution flag whenever there is a resolution change
 	m_resolution_changed = TRUE;
 
 	// Acquire and release buffers in a loop
-	for (;;)
-	{
+	for (;;) {
 		ComPtr<IDXGIResource> AcquiredBuffer;
 
 		// Ask for the next buffer from the producer
@@ -791,38 +761,27 @@ void SwapChainProcessor::RunCore()
 		hr = IddCxSwapChainReleaseAndAcquireBuffer(m_hSwapChain, &Buffer);
 
 		// AcquireBuffer immediately returns STATUS_PENDING if no buffer is yet available
-		if (hr == E_PENDING)
-		{
+		if (hr == E_PENDING) {
 			// We must wait for a new buffer
-			HANDLE WaitHandles[] =
-			{
-				m_hAvailableBufferEvent,
-				m_hTerminateEvent.Get()
-			};
+			HANDLE WaitHandles[] = {m_hAvailableBufferEvent, m_hTerminateEvent.Get()};
 			DWORD WaitResult = WaitForMultipleObjects(ARRAYSIZE(WaitHandles), WaitHandles, FALSE, 16);
-			if (WaitResult == WAIT_OBJECT_0 || WaitResult == WAIT_TIMEOUT)
-			{
+			if (WaitResult == WAIT_OBJECT_0 || WaitResult == WAIT_TIMEOUT) {
 				// We have a new buffer, so try the AcquireBuffer again
 				continue;
-			}
-			else if (WaitResult == WAIT_OBJECT_0 + 1)
-			{
+			} else if (WaitResult == WAIT_OBJECT_0 + 1) {
 				// We need to terminate
 				ERR("WaitResult == WAIT_OBJECT_0 + 1\n");
 				break;
-			}
-			else
-			{
+			} else {
 				// The wait was cancelled or something unexpected happened
 				hr = HRESULT_FROM_WIN32(WaitResult);
-				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr,
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-				ERR("Wait was either cancelled or something unexpected happened, screen = %d, err = %s\n", m_screen_num, err);
+				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err,
+							   255, NULL);
+				ERR("Wait was either cancelled or something unexpected happened, screen = %d, err = %s\n", m_screen_num,
+					err);
 				break;
 			}
-		}
-		else if (SUCCEEDED(hr))
-		{
+		} else if (SUCCEEDED(hr)) {
 			if ((g_init_kmd_resources == TRUE)) {
 
 				// We have new frame to process, the surface has a reference on it that the driver has to release
@@ -834,12 +793,12 @@ void SwapChainProcessor::RunCore()
 					break;
 				}
 
-				//Get Frame	from GPU
+				// Get Frame	from GPU
 				if (GetFrameData(m_Device, m_IAcquiredDesktopImage) == DVSERVERUMD_FAILURE) {
 					ERR("Failed getting frame from GPU\n");
 					AcquiredBuffer.Reset();
-					//We need to reset the swapchain in case of any catastrophic failures or any kind of TDR in GFX driver
-					//so exiting the runcore, OS will restart the IDD display
+					// We need to reset the swapchain in case of any catastrophic failures or any kind of TDR in GFX
+					// driver so exiting the runcore, OS will restart the IDD display
 					break;
 				}
 
@@ -848,52 +807,51 @@ void SwapChainProcessor::RunCore()
 				// Indicate to OS that we have finished inital processing of the frame, it is a hint that
 				// OS could start preparing another frame
 				hr = IddCxSwapChainFinishedProcessingFrame(m_hSwapChain);
-				if (FAILED(hr))
-				{
-					FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr,
-						MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+				if (FAILED(hr)) {
+					FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err,
+								   255, NULL);
 					ERR("IddCxSwapChainFinishedProcessingFrame Failed, screen = %d, err = %s\n", m_screen_num, err);
 					break;
 				}
 
-				//Need to report frame statistics to OS for every 60 frames
+				// Need to report frame statistics to OS for every 60 frames
 				if (m_frame_statistics_counter == REPORT_FRAME_STATS) {
 					report_frame_statistics(Buffer);
 					m_frame_statistics_counter = 0; // reset the frame statistics counter
 				}
 				m_frame_statistics_counter++;
 			}
-		}
-		else
-		{
+		} else {
 			// The swap-chain was likely abandoned (e.g. DXGI_ERROR_ACCESS_LOST), so exit the processing loop
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr,
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-			ERR("The swap-chain was likely abandoned (e.g. DXGI_ERROR_ACCESS_LOST), so exiting, screen = %d, err = %s\n", m_screen_num, err);
+			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255,
+						   NULL);
+			ERR("The swap-chain was likely abandoned (e.g. DXGI_ERROR_ACCESS_LOST), so exiting, screen = %d, err = "
+				"%s\n",
+				m_screen_num, err);
 			break;
 		}
 	}
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* GetFrameData - This function configures the frame metadata and gets the
-* frame from GPU.It passes the frame to DVserverKMD using IOCTL call :
-* set_mode and frame_data
-*
-* Parameters
-* dvserver_device - shared_ptr to  Direct3D Device (Direct3D render device)
-* desktopimage - ptr to ID3D11Texture2D  (A 2D texture interface manages
-* texel data). Uses method struct D3D11_TEXTURE2D_DESC to get the properties
-* of texture resource
-*
-* Return val
-* int - 0 == SUCCESS, -1 = ERROR
-*
-******************************************************************************/
-int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_device, ID3D11Texture2D* desktopimage)
+ *
+ * Description
+ *
+ * GetFrameData - This function configures the frame metadata and gets the
+ * frame from GPU.It passes the frame to DVserverKMD using IOCTL call :
+ * set_mode and frame_data
+ *
+ * Parameters
+ * dvserver_device - shared_ptr to  Direct3D Device (Direct3D render device)
+ * desktopimage - ptr to ID3D11Texture2D  (A 2D texture interface manages
+ * texel data). Uses method struct D3D11_TEXTURE2D_DESC to get the properties
+ * of texture resource
+ *
+ * Return val
+ * int - 0 == SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
+int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_device, ID3D11Texture2D *desktopimage)
 {
 	HRESULT status;
 	char err[256];
@@ -915,9 +873,15 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 		m_height = m_input_desc.Height;
 
 		switch (m_input_desc.Format) {
-		case DXGI_FORMAT_B8G8R8A8_UNORM: m_format = FRAME_TYPE_BGRA; break;
-		case DXGI_FORMAT_R8G8B8A8_UNORM: m_format = FRAME_TYPE_RGBA; break;
-		case DXGI_FORMAT_R10G10B10A2_UNORM: m_format = FRAME_TYPE_RGBA10; break;
+		case DXGI_FORMAT_B8G8R8A8_UNORM:
+			m_format = FRAME_TYPE_BGRA;
+			break;
+		case DXGI_FORMAT_R8G8B8A8_UNORM:
+			m_format = FRAME_TYPE_RGBA;
+			break;
+		case DXGI_FORMAT_R10G10B10A2_UNORM:
+			m_format = FRAME_TYPE_RGBA10;
+			break;
 		default:
 			ERR("Unsupported source format\n");
 		}
@@ -952,9 +916,10 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 	}
 
 	WaitForSingleObject(m_GPUResourceMutex, INFINITE);
-	dvserver_device->DeviceContext->CopyResource((ID3D11Resource*)m_destimage, (ID3D11Resource*)desktopimage);
+	dvserver_device->DeviceContext->CopyResource((ID3D11Resource *)m_destimage, (ID3D11Resource *)desktopimage);
 	desktopimage->Release();
-	status = dvserver_device->DeviceContext->Map((ID3D11Resource*)m_destimage, 0, D3D11_MAP_READ, 0, &m_staging_buffer);
+	status =
+		dvserver_device->DeviceContext->Map((ID3D11Resource *)m_destimage, 0, D3D11_MAP_READ, 0, &m_staging_buffer);
 	if (FAILED(status)) {
 		ERR("Failed to Map the resource dvserver_device->DeviceContext->Map\n");
 		m_destimage->Release();
@@ -972,8 +937,8 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 	m_framedata->stride = m_stride;
 	m_framedata->bitrate = DVSERVER_BBP;
 	m_framedata->screen_num = m_screen_num;
-	//Assigning the m_staging_buffer buffer addr
-	m_framedata->addr = (void*)m_staging_buffer.pData;
+	// Assigning the m_staging_buffer buffer addr
+	m_framedata->addr = (void *)m_staging_buffer.pData;
 
 	if (!(print_counter++ % PRINT_FREQ)) {
 		DBGPRINT("m_framedata->width = %d\n", m_framedata->width);
@@ -988,14 +953,12 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 
 	if (m_resolution_changed == TRUE) {
 		DBGPRINT("ResolutionChanged - sending SET MODE IOCTL\n");
-		//m_framedata->refresh_rate = FRAME_RR;
-		if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_SET_MODE, \
-			m_framedata, \
-			sizeof(struct FrameMetaData), m_ioctlresp_frame, \
-			sizeof(struct KMDF_IOCTL_Response), \
-			& m_ioctlresp_size, NULL)) {
-			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-				MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+		// m_framedata->refresh_rate = FRAME_RR;
+		if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_SET_MODE, m_framedata,
+							 sizeof(struct FrameMetaData), m_ioctlresp_frame, sizeof(struct KMDF_IOCTL_Response),
+							 &m_ioctlresp_size, NULL)) {
+			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+						   err, 255, NULL);
 			ERR("IOCTL_DVSERVER_SET_MODE call failed with error: %s!\n", err);
 			dvserver_device->DeviceContext->Unmap(m_destimage, 0);
 			m_destimage->Release();
@@ -1004,12 +967,10 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 		m_resolution_changed = FALSE;
 	}
 
-	if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_FRAME_DATA, \
-		m_framedata, sizeof(struct FrameMetaData), \
-		m_ioctlresp_frame, sizeof(struct KMDF_IOCTL_Response), \
-		& m_ioctlresp_size, NULL)) {
-		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+	if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_FRAME_DATA, m_framedata, sizeof(struct FrameMetaData),
+						 m_ioctlresp_frame, sizeof(struct KMDF_IOCTL_Response), &m_ioctlresp_size, NULL)) {
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err,
+					   255, NULL);
 		ERR("IOCTL_DVSERVER_FRAME_DATA call failed with error: %s!\n", err);
 		dvserver_device->DeviceContext->Unmap(m_destimage, 0);
 		m_destimage->Release();
@@ -1020,26 +981,26 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> dvserver_de
 }
 
 /********************************************************************************
-* Description
-*
-* report_frame_statistics - This function report frame statistics to OS for
-* every 60 frames
-*
-* Parameters
-* buffer - Access Per-frame metadata and frame information
-*
-* Return val
-* Null
-*
-******************************************************************************/
+ * Description
+ *
+ * report_frame_statistics - This function report frame statistics to OS for
+ * every 60 frames
+ *
+ * Parameters
+ * buffer - Access Per-frame metadata and frame information
+ *
+ * Return val
+ * Null
+ *
+ ******************************************************************************/
 void SwapChainProcessor::report_frame_statistics(IDARG_OUT_RELEASEANDACQUIREBUFFER buffer)
 {
-	IDDCX_FRAME_STATISTICS_STEP FrameStep = { 0 };
+	IDDCX_FRAME_STATISTICS_STEP FrameStep = {0};
 	FrameStep.Size = sizeof(FrameStep);
 	FrameStep.Type = IDDCX_FRAME_STATISTICS_STEP_TYPE_DRIVER_DEFINED_1;
 	FrameStep.QpcTime = buffer.MetaData.PresentDisplayQPCTime;
 
-	IDARG_IN_REPORTFRAMESTATISTICS ReportStatsIn = { 0 };
+	IDARG_IN_REPORTFRAMESTATISTICS ReportStatsIn = {0};
 	ReportStatsIn.FrameStatistics.Size = sizeof(ReportStatsIn.FrameStatistics);
 	ReportStatsIn.FrameStatistics.PresentationFrameNumber = buffer.MetaData.PresentationFrameNumber;
 	ReportStatsIn.FrameStatistics.FrameStatus = IDDCX_FRAME_STATUS_COMPLETED;
@@ -1053,7 +1014,7 @@ void SwapChainProcessor::report_frame_statistics(IDARG_OUT_RELEASEANDACQUIREBUFF
 	ReportStatsIn.FrameStatistics.ProcessedPixelCount = m_width * m_height;
 	ReportStatsIn.FrameStatistics.FrameSizeInBytes = ReportStatsIn.FrameStatistics.ProcessedPixelCount * 4;
 
-	//This API will report the frame statistics to OS 
+	// This API will report the frame statistics to OS
 	IddCxSwapChainReportFrameStatistics(m_hSwapChain, &ReportStatsIn);
 }
 
@@ -1067,65 +1028,57 @@ void SwapChainProcessor::GetCursorData()
 	INT tempY = UINT_MAX;
 
 	while (1) {
-		if (g_init_kmd_resources == TRUE)
-		{
-			HANDLE WaitHandles[] =
-			{
-				g_dvserver_cursor_os_event[m_screen_num].Get(),
-				m_hTerminateCursorEvent.Get()
-			};
+		if (g_init_kmd_resources == TRUE) {
+			HANDLE WaitHandles[] = {g_dvserver_cursor_os_event[m_screen_num].Get(), m_hTerminateCursorEvent.Get()};
 			/* wait for 16ms to get the cursor events from OS */
-			WaitResult = WaitForMultipleObjects(ARRAYSIZE(WaitHandles), WaitHandles, FALSE, DVSERVER_CURSOREVENT_WAIT_TIMEOUT);
+			WaitResult =
+				WaitForMultipleObjects(ARRAYSIZE(WaitHandles), WaitHandles, FALSE, DVSERVER_CURSOREVENT_WAIT_TIMEOUT);
 			if (WaitResult == WAIT_OBJECT_0) {
-				//Since IddCxMonitorQueryHardwareCursor2 is supported from IDD 1.7 onward.
-				// Older OS versions like Windows 10 are still limited to earlier versions, they only support IddCxMonitorQueryHardwareCursor.
-				// This check will identify the IDD version supported by the current OS and select the appropriate API call accordingly.
+				// Since IddCxMonitorQueryHardwareCursor2 is supported from IDD 1.7 onward.
+				//  Older OS versions like Windows 10 are still limited to earlier versions, they only support
+				//  IddCxMonitorQueryHardwareCursor. This check will identify the IDD version supported by the current
+				//  OS and select the appropriate API call accordingly.
 				if (IDD_IS_FUNCTION_AVAILABLE(IddCxMonitorQueryHardwareCursor2)) {
 					ProcessCursorData(&tempshapeid, &tempposid, &tempX, &tempY);
-				}
-				else {
+				} else {
 					ProcessCursorDataLegacy(&tempshapeid, &tempX, &tempY);
 				}
-			}
-			else if (WaitResult == WAIT_OBJECT_0 + 1) {
+			} else if (WaitResult == WAIT_OBJECT_0 + 1) {
 				// We need to terminate
 				break;
-			}
-			else if (WaitResult == WAIT_FAILED) {
+			} else if (WaitResult == WAIT_FAILED) {
 				// We need to terminate
 				break;
-			}
-			else if (WaitResult == WAIT_ABANDONED) {
+			} else if (WaitResult == WAIT_ABANDONED) {
 				// We need to terminate
 				break;
-			}
-			else if (WaitResult == STATUS_TIMEOUT) {
+			} else if (WaitResult == STATUS_TIMEOUT) {
 				// Continue waiting for cursor events
 				continue;
 			}
-		}
-		else {
-			//Since the cursor thread is running at high priority, before msft path is disabled sleep for some time and check 
-			// if the g_init_kmd_resources flag is true or not.. This will avoid the the Runcore thread starvation
+		} else {
+			// Since the cursor thread is running at high priority, before msft path is disabled sleep for some time and
+			// check
+			//  if the g_init_kmd_resources flag is true or not.. This will avoid the the Runcore thread starvation
 			Sleep(2000);
 		}
 	} // end of while(1)
 }
 
-void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, INT* tempY)
+void SwapChainProcessor::ProcessCursorDataLegacy(UINT *tempshapeid, INT *tempX, INT *tempY)
 {
 	HRESULT status;
 	char err[256];
 	memset(err, 0, 256);
-	
+
 	SecureZeroMemory(&m0_outputargs, sizeof(struct IDARG_OUT_QUERY_HWCURSOR));
-	status = IddCxMonitorQueryHardwareCursor(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num], &m0_outputargs);
+	status = IddCxMonitorQueryHardwareCursor(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num],
+											 &m0_outputargs);
 	if (!NT_SUCCESS(status)) {
 		ERR("Failed IddCxMonitorQueryHardwareCursor\n");
-		//We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
+		// We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
 		return;
-	}
-	else { //Success
+	} else { // Success
 		bool positionChanged = ((*tempX != m0_outputargs.X) || (*tempY != m0_outputargs.Y));
 		bool shapeChanged = (*tempshapeid != m0_outputargs.CursorShapeInfo.ShapeId);
 		SecureZeroMemory(m_cursordata, sizeof(struct CursorData));
@@ -1136,12 +1089,11 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, 
 			m_cursordata->iscursorvisible = m0_outputargs.IsCursorVisible;
 			m_cursordata->cursor_x = m0_outputargs.X;
 			m_cursordata->cursor_y = m0_outputargs.Y;
-			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_POS, \
-				m_cursordata, sizeof(struct CursorData), \
-				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
-				& m_ioctlresp_size, NULL)) {
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_POS, m_cursordata,
+								 sizeof(struct CursorData), m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response),
+								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 				ERR("IOCTL_DVSERVER_CURSOR_POS call failed with error: %s!\n", err);
 			}
 		}
@@ -1158,33 +1110,33 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT* tempshapeid, INT* tempX, 
 			m_cursordata->iscursorvisible = m0_outputargs.IsCursorVisible;
 			m_cursordata->data = g_inputargs[m_screen_num].pShapeBuffer;
 			m_cursordata->color_format = DVSERVERUMD_COLORFORMAT;
-			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_DATA, \
-				m_cursordata, sizeof(struct CursorData), \
-				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
-				& m_ioctlresp_size, NULL)) {
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_DATA, m_cursordata,
+								 sizeof(struct CursorData), m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response),
+								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed with error: %s!\n", err);
 			}
 		}
 	}
 }
 
-void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, INT* tempX, INT* tempY)
+void SwapChainProcessor::ProcessCursorData(UINT *tempshapeid, UINT *tempposid, INT *tempX, INT *tempY)
 {
 	HRESULT status;
 	char err[256];
 	memset(err, 0, 256);
-	
+
 	SecureZeroMemory(&m_outputargs, sizeof(struct IDARG_OUT_QUERY_HWCURSOR2));
-	status = IddCxMonitorQueryHardwareCursor2(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num], &m_outputargs);
+	status = IddCxMonitorQueryHardwareCursor2(g_DvserverCxMonitorObject[m_screen_num], &g_inputargs[m_screen_num],
+											  &m_outputargs);
 	if (!NT_SUCCESS(status)) {
 		ERR("Failed IddCxMonitorQueryHardwareCursor2\n");
-		//We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
+		// We should try multiple attempts from OS for querying the hwd cursor, sometimes it will fail.
 		return;
-	}
-	else {
-		bool positionChanged = (*tempposid != m_outputargs.PositionId) && (m_outputargs.PositionValid == TRUE) && ((*tempX != m_outputargs.X) || (*tempY != m_outputargs.Y));
+	} else {
+		bool positionChanged = (*tempposid != m_outputargs.PositionId) && (m_outputargs.PositionValid == TRUE) &&
+							   ((*tempX != m_outputargs.X) || (*tempY != m_outputargs.Y));
 		bool shapeChanged = (*tempshapeid != m_outputargs.CursorShapeInfo.ShapeId);
 		SecureZeroMemory(m_cursordata, sizeof(struct CursorData));
 		if (positionChanged) {
@@ -1195,12 +1147,11 @@ void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, I
 			m_cursordata->iscursorvisible = m_outputargs.IsCursorVisible;
 			m_cursordata->cursor_x = m_outputargs.X;
 			m_cursordata->cursor_y = m_outputargs.Y;
-			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_POS, \
-				m_cursordata, sizeof(struct CursorData), \
-				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
-				& m_ioctlresp_size, NULL)) {
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_POS, m_cursordata,
+								 sizeof(struct CursorData), m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response),
+								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 				ERR("IOCTL_DVSERVER_CURSOR_POS call failed with error: %s!\n", err);
 			}
 		}
@@ -1217,12 +1168,11 @@ void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, I
 			m_cursordata->iscursorvisible = m_outputargs.IsCursorVisible;
 			m_cursordata->data = g_inputargs[m_screen_num].pShapeBuffer;
 			m_cursordata->color_format = DVSERVERUMD_COLORFORMAT;
-			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_DATA, \
-				m_cursordata, sizeof(struct CursorData), \
-				m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response), \
-				& m_ioctlresp_size, NULL)) {
+			if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_DVSERVER_CURSOR_DATA, m_cursordata,
+								 sizeof(struct CursorData), m_ioctlresp_cursor, sizeof(struct KMDF_IOCTL_Response),
+								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-					MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
 				ERR("IOCTL_DVSERVER_CURSOR_DATA call failed with error: %s!\n", err);
 			}
 		}
@@ -1233,15 +1183,9 @@ void SwapChainProcessor::ProcessCursorData(UINT* tempshapeid, UINT* tempposid, I
 
 #pragma region IndirectDeviceContext
 
-IndirectDeviceContext::IndirectDeviceContext(_In_ WDFDEVICE WdfDevice) :
-	m_WdfDevice(WdfDevice)
-{
-	m_Adapter = {};
-}
+IndirectDeviceContext::IndirectDeviceContext(_In_ WDFDEVICE WdfDevice) : m_WdfDevice(WdfDevice) { m_Adapter = {}; }
 
-IndirectDeviceContext::~IndirectDeviceContext()
-{
-}
+IndirectDeviceContext::~IndirectDeviceContext() {}
 
 void IndirectDeviceContext::InitAdapter(WDF_POWER_DEVICE_STATE PreviousState)
 {
@@ -1259,7 +1203,7 @@ void IndirectDeviceContext::InitAdapter(WDF_POWER_DEVICE_STATE PreviousState)
 		IDDCX_ADAPTER_CAPS AdapterCaps = {};
 		AdapterCaps.Size = sizeof(AdapterCaps);
 
-		//This flag enables IDD Display to change the resolution
+		// This flag enables IDD Display to change the resolution
 		AdapterCaps.Flags = IDDCX_ADAPTER_FLAGS_USE_SMALLEST_MODE;
 
 		// Declare basic feature support for the adapter (required)
@@ -1298,17 +1242,15 @@ void IndirectDeviceContext::InitAdapter(WDF_POWER_DEVICE_STATE PreviousState)
 			m_Adapter = AdapterInitOut.AdapterObject;
 
 			// Store the device context object into the WDF object context
-			auto* pContext = WdfObjectGet_IndirectDeviceContextWrapper(AdapterInitOut.AdapterObject);
+			auto *pContext = WdfObjectGet_IndirectDeviceContextWrapper(AdapterInitOut.AdapterObject);
 			pContext->pContext = this;
 		}
-	}
-	else {
+	} else {
 		// Create the HPD thread if the system boots from WdfPowerDeviceD3
 		g_hpdthread_handle = CreateThread(nullptr, 0, IndirectDeviceContext::HPDThread, m_Adapter, 0, nullptr);
 		if (g_hpdthread_handle == NULL) {
 			ERR("Failed to create HPD Thread");
 		}
-
 	}
 }
 
@@ -1326,23 +1268,21 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 	WDF_OBJECT_ATTRIBUTES Attr;
 	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&Attr, IndirectMonitorContextWrapper);
 
-	// In the sample driver, we report a monitor right away but a real driver would do this when a monitor connection event occurs
+	// In the sample driver, we report a monitor right away but a real driver would do this when a monitor connection
+	// event occurs
 	IDDCX_MONITOR_INFO MonitorInfo = {};
 	MonitorInfo.Size = sizeof(MonitorInfo);
-	MonitorInfo.MonitorType = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED;//DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI;
+	MonitorInfo.MonitorType = DISPLAYCONFIG_OUTPUT_TECHNOLOGY_INDIRECT_WIRED; // DISPLAYCONFIG_OUTPUT_TECHNOLOGY_HDMI;
 	MonitorInfo.ConnectorIndex = ConnectorIndex;
 
 	MonitorInfo.MonitorDescription.Size = sizeof(MonitorInfo.MonitorDescription);
 	MonitorInfo.MonitorDescription.Type = IDDCX_MONITOR_DESCRIPTION_TYPE_EDID;
-	if (ConnectorIndex >= dvserver_monitor_count)
-	{
+	if (ConnectorIndex >= dvserver_monitor_count) {
 		MonitorInfo.MonitorDescription.DataSize = 0;
 		MonitorInfo.MonitorDescription.pData = nullptr;
-	}
-	else
-	{
+	} else {
 		MonitorInfo.MonitorDescription.DataSize = IndirectSampleMonitor::szEdidBlock;
-		MonitorInfo.MonitorDescription.pData = const_cast<BYTE*>(g_monitors[ConnectorIndex].pEdidBlock);
+		MonitorInfo.MonitorDescription.pData = const_cast<BYTE *>(g_monitors[ConnectorIndex].pEdidBlock);
 	}
 
 	// ==============================
@@ -1363,10 +1303,9 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 	// Create a monitor object with the specified monitor descriptor
 	IDARG_OUT_MONITORCREATE MonitorCreateOut;
 	NTSTATUS Status = IddCxMonitorCreate(m_Adapter, &MonitorCreate, &MonitorCreateOut);
-	if (NT_SUCCESS(Status))
-	{
+	if (NT_SUCCESS(Status)) {
 		// Create a new monitor context object and attach it to the Idd monitor object
-		auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorCreateOut.MonitorObject);
+		auto *pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorCreateOut.MonitorObject);
 		pMonitorContextWrapper->pContext = new IndirectMonitorContext(MonitorCreateOut.MonitorObject, ConnectorIndex);
 
 		// Tell the OS that the monitor has been plugged in
@@ -1376,27 +1315,26 @@ void IndirectDeviceContext::FinishInit(UINT ConnectorIndex)
 			ERR(" Monitor Arrival failed with  error 0x%X\n", Status);
 		}
 		g_monitorobject_list[ConnectorIndex] = MonitorCreateOut.MonitorObject;
-	}
-	else {
+	} else {
 		ERR(" Monitor Create failed with  error 0x%X\n", Status);
 	}
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* HPDThread - In This function we are creating a new thread for HOT PLUG feature
-* where we will pass the display addapter, which is created by OS to add and
-* remove the monitors in runtime
-*
-* Parameters
-* IDDCX_ADAPTER - Display adapter from OS to add the additional monitor
-*
-* Return val
-* int - 0 == SUCCESS, -1 = ERROR
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * HPDThread - In This function we are creating a new thread for HOT PLUG feature
+ * where we will pass the display addapter, which is created by OS to add and
+ * remove the monitors in runtime
+ *
+ * Parameters
+ * IDDCX_ADAPTER - Display adapter from OS to add the additional monitor
+ *
+ * Return val
+ * int - 0 == SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
 DWORD CALLBACK IndirectDeviceContext::HPDThread(LPVOID Argument)
 {
 	TRACING();
@@ -1410,15 +1348,14 @@ DWORD CALLBACK IndirectDeviceContext::HPDThread(LPVOID Argument)
 	return 0;
 }
 
-IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, _In_ UINT ConnectorIndex) :
-	m_Monitor(Monitor), m_MonitorIndex(ConnectorIndex), m_cursor_event(nullptr)
-{
-}
+IndirectMonitorContext::IndirectMonitorContext(_In_ IDDCX_MONITOR Monitor, _In_ UINT ConnectorIndex)
+	: m_Monitor(Monitor), m_MonitorIndex(ConnectorIndex), m_cursor_event(nullptr)
+{}
 
 IndirectMonitorContext::~IndirectMonitorContext()
 {
 	m_ProcessingThread.reset();
-	if (g_inputargs[m_MonitorIndex].pShapeBuffer != INVALID_HANDLE_VALUE) {		
+	if (g_inputargs[m_MonitorIndex].pShapeBuffer != INVALID_HANDLE_VALUE) {
 		free(g_inputargs[m_MonitorIndex].pShapeBuffer);
 	}
 
@@ -1457,9 +1394,8 @@ void IndirectMonitorContext::SetupDVServerCursor()
 			ERR("Failed allocating cursor buffer\n");
 			g_init_kmd_resources = FALSE;
 			return;
-		}		
-	}
-	else {
+		}
+	} else {
 		ERR("Hardware cursor setup failed\n");
 		g_init_kmd_resources = FALSE;
 	}
@@ -1471,14 +1407,11 @@ void IndirectMonitorContext::AssignSwapChain(IDDCX_SWAPCHAIN SwapChain, LUID Ren
 	m_ProcessingThread.reset();
 
 	auto Device = make_shared<Direct3DDevice>(RenderAdapter);
-	if (FAILED(Device->Init()))
-	{
+	if (FAILED(Device->Init())) {
 		// It's important to delete the swap-chain if D3D initialization fails, so that the OS knows to generate a new
 		// swap-chain and try again.
 		WdfObjectDelete(SwapChain);
-	}
-	else
-	{
+	} else {
 		if (hwcursorsupported == TRUE) {
 			IndirectMonitorContext::SetupDVServerCursor();
 		}
@@ -1497,8 +1430,8 @@ void IndirectMonitorContext::UnassignSwapChain()
 
 #pragma region DDI Callbacks
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG_IN_ADAPTER_INIT_FINISHED* pInArgs)
+_Use_decl_annotations_ NTSTATUS DVServerUMDAdapterInitFinished(IDDCX_ADAPTER AdapterObject,
+															   const IDARG_IN_ADAPTER_INIT_FINISHED *pInArgs)
 {
 	// This is called when the OS has finished setting up the adapter for use by the IddCx driver. It's now possible
 	// to report attached monitors.
@@ -1513,8 +1446,8 @@ NTSTATUS DVServerUMDAdapterInitFinished(IDDCX_ADAPTER AdapterObject, const IDARG
 	return STATUS_SUCCESS;
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_IN_COMMITMODES* pInArgs)
+_Use_decl_annotations_ NTSTATUS DVServerUMDAdapterCommitModes(IDDCX_ADAPTER AdapterObject,
+															  const IDARG_IN_COMMITMODES *pInArgs)
 {
 	UNREFERENCED_PARAMETER(AdapterObject);
 	UNREFERENCED_PARAMETER(pInArgs);
@@ -1530,8 +1463,8 @@ NTSTATUS DVServerUMDAdapterCommitModes(IDDCX_ADAPTER AdapterObject, const IDARG_
 	return STATUS_SUCCESS;
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTION* pInArgs, IDARG_OUT_PARSEMONITORDESCRIPTION* pOutArgs)
+_Use_decl_annotations_ NTSTATUS DVServerUMDParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTION *pInArgs,
+																   IDARG_OUT_PARSEMONITORDESCRIPTION *pOutArgs)
 {
 	// ==============================
 	// TODO: In a real driver, this function would be called to generate monitor modes for an EDID by parsing it. In
@@ -1541,13 +1474,10 @@ NTSTATUS DVServerUMDParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTI
 
 	pOutArgs->MonitorModeBufferOutputCount = IndirectSampleMonitor::szModeList;
 
-	if (pInArgs->MonitorModeBufferInputCount < IndirectSampleMonitor::szModeList)
-	{
+	if (pInArgs->MonitorModeBufferInputCount < IndirectSampleMonitor::szModeList) {
 		// Return success if there was no buffer, since the caller was only asking for a count of modes
 		return (pInArgs->MonitorModeBufferInputCount > 0) ? STATUS_BUFFER_TOO_SMALL : STATUS_SUCCESS;
-	}
-	else
-	{
+	} else {
 		// In the sample driver, we have reported some static information about connected monitors
 		// Check which of the reported monitors this call is for by comparing it to the pointer of
 		// our known EDID blocks.
@@ -1555,19 +1485,16 @@ NTSTATUS DVServerUMDParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTI
 		if (pInArgs->MonitorDescription.DataSize != IndirectSampleMonitor::szEdidBlock)
 			return STATUS_INVALID_PARAMETER;
 
-		for (DWORD SampleMonitorIdx = 0; SampleMonitorIdx < dvserver_monitor_count; SampleMonitorIdx++)
-		{
-			if (memcmp(pInArgs->MonitorDescription.pData, g_monitors[SampleMonitorIdx].pEdidBlock, IndirectSampleMonitor::szEdidBlock) == 0)
-			{
+		for (DWORD SampleMonitorIdx = 0; SampleMonitorIdx < dvserver_monitor_count; SampleMonitorIdx++) {
+			if (memcmp(pInArgs->MonitorDescription.pData, g_monitors[SampleMonitorIdx].pEdidBlock,
+					   IndirectSampleMonitor::szEdidBlock) == 0) {
 				// Copy the known modes to the output buffer
-				for (DWORD ModeIndex = 0; ModeIndex < IndirectSampleMonitor::szModeList; ModeIndex++)
-				{
-					pInArgs->pMonitorModes[ModeIndex] = CreateIddCxMonitorMode(
-						g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Width,
-						g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Height,
-						g_monitors[SampleMonitorIdx].pModeList[ModeIndex].VSync,
-						IDDCX_MONITOR_MODE_ORIGIN_MONITORDESCRIPTOR
-					);
+				for (DWORD ModeIndex = 0; ModeIndex < IndirectSampleMonitor::szModeList; ModeIndex++) {
+					pInArgs->pMonitorModes[ModeIndex] =
+						CreateIddCxMonitorMode(g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Width,
+											   g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Height,
+											   g_monitors[SampleMonitorIdx].pModeList[ModeIndex].VSync,
+											   IDDCX_MONITOR_MODE_ORIGIN_MONITORDESCRIPTOR);
 				}
 
 				// Set the preferred mode as represented in the EDID
@@ -1581,8 +1508,9 @@ NTSTATUS DVServerUMDParseMonitorDescription(const IDARG_IN_PARSEMONITORDESCRIPTI
 	}
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_GETDEFAULTDESCRIPTIONMODES* pInArgs, IDARG_OUT_GETDEFAULTDESCRIPTIONMODES* pOutArgs)
+_Use_decl_annotations_ NTSTATUS DVServerUMDMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject,
+																  const IDARG_IN_GETDEFAULTDESCRIPTIONMODES *pInArgs,
+																  IDARG_OUT_GETDEFAULTDESCRIPTIONMODES *pOutArgs)
 {
 	UNREFERENCED_PARAMETER(MonitorObject);
 	TRACING();
@@ -1594,20 +1522,13 @@ NTSTATUS DVServerUMDMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const ID
 	// than an EDID, those modes would also be reported here.
 	// ==============================
 
-	if (pInArgs->DefaultMonitorModeBufferInputCount == 0)
-	{
+	if (pInArgs->DefaultMonitorModeBufferInputCount == 0) {
 		pOutArgs->DefaultMonitorModeBufferOutputCount = ARRAYSIZE(s_SampleDefaultModes);
-	}
-	else
-	{
-		for (DWORD ModeIndex = 0; ModeIndex < ARRAYSIZE(s_SampleDefaultModes); ModeIndex++)
-		{
-			pInArgs->pDefaultMonitorModes[ModeIndex] = CreateIddCxMonitorMode(
-				s_SampleDefaultModes[ModeIndex].Width,
-				s_SampleDefaultModes[ModeIndex].Height,
-				s_SampleDefaultModes[ModeIndex].VSync,
-				IDDCX_MONITOR_MODE_ORIGIN_DRIVER
-			);
+	} else {
+		for (DWORD ModeIndex = 0; ModeIndex < ARRAYSIZE(s_SampleDefaultModes); ModeIndex++) {
+			pInArgs->pDefaultMonitorModes[ModeIndex] =
+				CreateIddCxMonitorMode(s_SampleDefaultModes[ModeIndex].Width, s_SampleDefaultModes[ModeIndex].Height,
+									   s_SampleDefaultModes[ModeIndex].VSync, IDDCX_MONITOR_MODE_ORIGIN_DRIVER);
 		}
 
 		pOutArgs->DefaultMonitorModeBufferOutputCount = ARRAYSIZE(s_SampleDefaultModes);
@@ -1617,8 +1538,9 @@ NTSTATUS DVServerUMDMonitorGetDefaultModes(IDDCX_MONITOR MonitorObject, const ID
 	return STATUS_SUCCESS;
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_IN_QUERYTARGETMODES* pInArgs, IDARG_OUT_QUERYTARGETMODES* pOutArgs)
+_Use_decl_annotations_ NTSTATUS DVServerUMDMonitorQueryModes(IDDCX_MONITOR MonitorObject,
+															 const IDARG_IN_QUERYTARGETMODES *pInArgs,
+															 IDARG_OUT_QUERYTARGETMODES *pOutArgs)
 {
 	UNREFERENCED_PARAMETER(MonitorObject);
 	TRACING();
@@ -1631,13 +1553,15 @@ NTSTATUS DVServerUMDMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_I
 
 	DWORD SampleMonitorIdx = 0;
 	for (SampleMonitorIdx = 0; SampleMonitorIdx < dvserver_monitor_count; SampleMonitorIdx++) {
-		if (memcmp(pInArgs->MonitorDescription.pData, g_monitors[SampleMonitorIdx].pEdidBlock, IndirectSampleMonitor::szEdidBlock) == 0) {
+		if (memcmp(pInArgs->MonitorDescription.pData, g_monitors[SampleMonitorIdx].pEdidBlock,
+				   IndirectSampleMonitor::szEdidBlock) == 0) {
 			// Copy the known modes to the output buffer
 			for (DWORD ModeIndex = 0; ModeIndex < IndirectSampleMonitor::szModeList; ModeIndex++) {
 				if (SampleMonitorIdx < dvserver_monitor_count) {
-					TargetModes.push_back(CreateIddCxTargetMode(g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Width,
-						g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Height,
-						g_monitors[SampleMonitorIdx].pModeList[ModeIndex].VSync));
+					TargetModes.push_back(
+						CreateIddCxTargetMode(g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Width,
+											  g_monitors[SampleMonitorIdx].pModeList[ModeIndex].Height,
+											  g_monitors[SampleMonitorIdx].pModeList[ModeIndex].VSync));
 				}
 			}
 			pOutArgs->TargetModeBufferOutputCount = (UINT)TargetModes.size();
@@ -1652,39 +1576,38 @@ NTSTATUS DVServerUMDMonitorQueryModes(IDDCX_MONITOR MonitorObject, const IDARG_I
 	return STATUS_INVALID_PARAMETER;
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDMonitorAssignSwapChain(IDDCX_MONITOR MonitorObject, const IDARG_IN_SETSWAPCHAIN* pInArgs)
+_Use_decl_annotations_ NTSTATUS DVServerUMDMonitorAssignSwapChain(IDDCX_MONITOR MonitorObject,
+																  const IDARG_IN_SETSWAPCHAIN *pInArgs)
 {
-	auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
-	pMonitorContextWrapper->pContext->AssignSwapChain(pInArgs->hSwapChain, pInArgs->RenderAdapterLuid, pInArgs->hNextSurfaceAvailable);
+	auto *pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
+	pMonitorContextWrapper->pContext->AssignSwapChain(pInArgs->hSwapChain, pInArgs->RenderAdapterLuid,
+													  pInArgs->hNextSurfaceAvailable);
 	return STATUS_SUCCESS;
 }
 
-_Use_decl_annotations_
-NTSTATUS DVServerUMDMonitorUnassignSwapChain(IDDCX_MONITOR MonitorObject)
+_Use_decl_annotations_ NTSTATUS DVServerUMDMonitorUnassignSwapChain(IDDCX_MONITOR MonitorObject)
 {
-	auto* pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
+	auto *pMonitorContextWrapper = WdfObjectGet_IndirectMonitorContextWrapper(MonitorObject);
 	pMonitorContextWrapper->pContext->UnassignSwapChain();
 	return STATUS_SUCCESS;
 }
 
-
 /*******************************************************************************
-*
-* Description
-*
-* hpd_event_create - This function creates an HOTPLUG event. Passes the
-* event handle to KMD and gets the current display status. Then compares
-* the perivous display state with current display state and calls  FinishInit/
-* IddCxMonitorDeparture
-*
-* Parameters
-* IDDCX_ADAPTER -- Display adapter from OS to add the additional monitor
-*
-* Return val
-* int - 0 == SUCCESS, -1 = ERROR
-*
-******************************************************************************/
+ *
+ * Description
+ *
+ * hpd_event_create - This function creates an HOTPLUG event. Passes the
+ * event handle to KMD and gets the current display status. Then compares
+ * the perivous display state with current display state and calls  FinishInit/
+ * IddCxMonitorDeparture
+ *
+ * Parameters
+ * IDDCX_ADAPTER -- Display adapter from OS to add the additional monitor
+ *
+ * Return val
+ * int - 0 == SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
 int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 {
 	TRACING();
@@ -1698,18 +1621,18 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	bool isWin11 = FALSE;
 	int status;
 	int count;
-	disp_info dinfo = { 0 };
-	hp_info hdata = { 0 };
-	monitor_info minfo[MAX_SCAN_OUT] = { 0 };
+	disp_info dinfo = {0};
+	hp_info hdata = {0};
+	monitor_info minfo[MAX_SCAN_OUT] = {0};
 	HANDLE devHandle = g_DevInfo->get_Handle();
-	auto* pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
+	auto *pDeviceContextWrapper = WdfObjectGet_IndirectDeviceContextWrapper(AdapterObject);
 
-	//Create Security Descriptor for HOTPLUG_EVENT, To allow the user application(Dvenabler) to access the event
+	// Create Security Descriptor for HOTPLUG_EVENT, To allow the user application(Dvenabler) to access the event
 	PSECURITY_DESCRIPTOR hp_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
 	InitializeSecurityDescriptor(hp_psd, SECURITY_DESCRIPTOR_REVISION);
 	SetSecurityDescriptorDacl(hp_psd, TRUE, NULL, FALSE);
 
-	SECURITY_ATTRIBUTES hp_sa = { 0 };
+	SECURITY_ATTRIBUTES hp_sa = {0};
 	hp_sa.nLength = sizeof(hp_sa);
 	hp_sa.lpSecurityDescriptor = hp_psd;
 	hp_sa.bInheritHandle = FALSE;
@@ -1728,12 +1651,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		return DVSERVERUMD_FAILURE;
 	}
 
-	//Create Security Descriptor for DVE_EVENT, To allow the user application(DVenabler) to access the event
+	// Create Security Descriptor for DVE_EVENT, To allow the user application(DVenabler) to access the event
 	PSECURITY_DESCRIPTOR dve_psd = (PSECURITY_DESCRIPTOR)LocalAlloc(LPTR, SECURITY_DESCRIPTOR_MIN_LENGTH);
 	InitializeSecurityDescriptor(dve_psd, SECURITY_DESCRIPTOR_REVISION);
 	SetSecurityDescriptorDacl(dve_psd, TRUE, NULL, FALSE);
 
-	SECURITY_ATTRIBUTES dve_sa = { 0 };
+	SECURITY_ATTRIBUTES dve_sa = {0};
 	dve_sa.nLength = sizeof(dve_sa);
 	dve_sa.lpSecurityDescriptor = dve_psd;
 	dve_sa.bInheritHandle = FALSE;
@@ -1756,7 +1679,8 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	secAttr.lpSecurityDescriptor = &secDesc;
 
 	// Create the shared memory section
-	HANDLE hSharedMem = CreateFileMapping(INVALID_HANDLE_VALUE, &secAttr, PAGE_READWRITE, 0, sizeof(struct disp_info), DISP_INFO);
+	HANDLE hSharedMem =
+		CreateFileMapping(INVALID_HANDLE_VALUE, &secAttr, PAGE_READWRITE, 0, sizeof(struct disp_info), DISP_INFO);
 
 	if (hSharedMem == NULL) {
 		ERR("Failed to create shared memory section (%d)\n", GetLastError());
@@ -1768,12 +1692,12 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 
 	DBGPRINT("Shared memory section created successfully\n");
 
-	struct disp_info* pSharedMem = (struct disp_info*)MapViewOfFile(
-		hSharedMem,          // Handle to the shared memory section
-		FILE_MAP_ALL_ACCESS, // Read/write access
-		0,                   // File offset - high-order DWORD
-		0,                   // File offset - low-order DWORD
-		0);                  // Mapping size (0 means to map the entire section)
+	struct disp_info *pSharedMem =
+		(struct disp_info *)MapViewOfFile(hSharedMem,		   // Handle to the shared memory section
+										  FILE_MAP_ALL_ACCESS, // Read/write access
+										  0,				   // File offset - high-order DWORD
+										  0,				   // File offset - low-order DWORD
+										  0);				   // Mapping size (0 means to map the entire section)
 
 	if (pSharedMem == NULL) {
 		ERR(L"Failed to map view of shared memory section (%d)\n", GetLastError());
@@ -1798,7 +1722,8 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 	isWin11 = IsWindows11OrLater();
 	DBGPRINT("OS Version is %s, using %s EDID", isWin11 ? "WIN11" : "WIN10", isWin11 ? "realtime" : "default");
 
-	if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[PRIMARY_IDD_INDEX], PRIMARY_IDD_INDEX, isWin11 ? FALSE : d_edid) == DVSERVERUMD_FAILURE) {
+	if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[PRIMARY_IDD_INDEX], PRIMARY_IDD_INDEX,
+					  isWin11 ? FALSE : d_edid) == DVSERVERUMD_FAILURE) {
 		ERR("QEMU EDID initialization failed to get the corresponding EDID");
 	}
 
@@ -1815,11 +1740,11 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 		ERR("Set dve-event failed during first display arrival with error [%d]\n ", GetLastError());
 	}
 
-	HANDLE hp_handles[] = { hp_event , hp_terminate_event };
+	HANDLE hp_handles[] = {hp_event, hp_terminate_event};
 
 	while (1) {
-		//After user login, first time DVenabler will set this event to enable the HPD Path.
-		//KMD will set this for every HP interrupt recieved from QEMU.
+		// After user login, first time DVenabler will set this event to enable the HPD Path.
+		// KMD will set this for every HP interrupt recieved from QEMU.
 		waitstatus = WaitForMultipleObjects(ARRAYSIZE(hp_handles), hp_handles, FALSE, INFINITE);
 		if (waitstatus == WAIT_OBJECT_0) {
 			if (d_edid) {
@@ -1828,13 +1753,13 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 				g_monitorobject_list[PRIMARY_IDD_INDEX] = NULL;
 				d_edid = FALSE;
 			}
-			hdata.screen_present[3] = { 0 };
+			hdata.screen_present[3] = {0};
 			if (get_hpd_data(devHandle, &hdata) != DVSERVERUMD_SUCCESS) {
 				ERR("HotPlug resource allocation failed... Going back to the loop again");
 				continue;
 			}
 
-			//call display arrival and departure based on previous and current display state.
+			// call display arrival and departure based on previous and current display state.
 			for (count = 0; count < MAX_SCAN_OUT; count++) {
 
 				if (minfo[count].status != hdata.screen_present[count]) {
@@ -1846,23 +1771,24 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 						g_monitorobject_list[count] = NULL;
 						memset(minfo[count].pEdidBlock, 0, minfo[count].szEdidBlock);
 						dinfo.disp_count--;
-					}
-					else {
-						if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, d_edid) == DVSERVERUMD_FAILURE) {
+					} else {
+						if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, d_edid) ==
+							DVSERVERUMD_FAILURE) {
 							ERR("QEMU EDID initialization failed, falling back to default IDD EDID");
 							get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, TRUE);
 						}
 
-						memcpy_s(minfo[count].pEdidBlock, minfo->szEdidBlock, g_monitors[count].pEdidBlock, minfo->szEdidBlock);
-
+						memcpy_s(minfo[count].pEdidBlock, minfo->szEdidBlock, g_monitors[count].pEdidBlock,
+								 minfo->szEdidBlock);
 
 						DBGPRINT("call finishinit for DISPLAY = %d\n", count);
 						pDeviceContextWrapper->pContext->FinishInit(count);
 						dinfo.disp_count++;
 					}
 					do_set_event = TRUE;
-				} else if(hdata.screen_present[count]) {
-					if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, d_edid) == DVSERVERUMD_FAILURE) {
+				} else if (hdata.screen_present[count]) {
+					if (get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, d_edid) ==
+						DVSERVERUMD_FAILURE) {
 						ERR("QEMU EDID initialization failed, falling back to default IDD EDID");
 						get_edid_data(g_DevInfo->get_Handle(), &g_monitors[count], count, TRUE);
 					}
@@ -1870,23 +1796,21 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 					if (memcmp(minfo[count].pEdidBlock, g_monitors[count].pEdidBlock, minfo->szEdidBlock) != 0) {
 						DBGPRINT("EDID changed for display = %d\n", count);
 
-						//Reset the edid block and copy the new edid block
+						// Reset the edid block and copy the new edid block
 						memset(minfo[count].pEdidBlock, 0, minfo[count].szEdidBlock);
-						memcpy_s(minfo[count].pEdidBlock, minfo->szEdidBlock, g_monitors[count].pEdidBlock, minfo->szEdidBlock);
+						memcpy_s(minfo[count].pEdidBlock, minfo->szEdidBlock, g_monitors[count].pEdidBlock,
+								 minfo->szEdidBlock);
 
-
-						//Remove the display and connect it again with fresh EDID
+						// Remove the display and connect it again with fresh EDID
 						IddCxMonitorDeparture(g_monitorobject_list[count]);
 						g_monitorobject_list[count] = NULL;
 						pDeviceContextWrapper->pContext->FinishInit(count);
 						do_set_event = TRUE;
-					}
-					else {
+					} else {
 						DBGPRINT("No changes in DISPLAY = %d\n", count);
 					}
 
-				}
-				else {
+				} else {
 					DBGPRINT("No changes in DISPLAY = %d\n", count);
 				}
 			}
@@ -1903,12 +1827,10 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 			}
 			do_set_event = FALSE;
 
-		}
-		else if (waitstatus == WAIT_OBJECT_0 + 1) {
+		} else if (waitstatus == WAIT_OBJECT_0 + 1) {
 			DBGPRINT("UMD is entering D3 state so kill the HPD thread");
 			break;
-		}
-		else {
+		} else {
 			ERR("HPD Wait was either cancelled or something unexpected happened");
 			break;
 		}
@@ -1932,22 +1854,22 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 }
 
 /*******************************************************************************
-*
-* Description
-*
-* get_hpd_data - whenever the HPEVENT is set, this function sends an
-* ioctl(IOCTL_DVSERVER_HP_EVENT) to DVserverKMD to get the current
-* display status which is recieved from QEMU
-*
-* Parameters
-* devHandle - device frame Handle to DVServerKMD
-* data - pointer to hp_info structure
-*
-* Return val
-* int - 0 == SUCCESS, -1 = ERROR
-*
-******************************************************************************/
-int get_hpd_data(HANDLE devHandle, hp_info* data)
+ *
+ * Description
+ *
+ * get_hpd_data - whenever the HPEVENT is set, this function sends an
+ * ioctl(IOCTL_DVSERVER_HP_EVENT) to DVserverKMD to get the current
+ * display status which is recieved from QEMU
+ *
+ * Parameters
+ * devHandle - device frame Handle to DVServerKMD
+ * data - pointer to hp_info structure
+ *
+ * Return val
+ * int - 0 == SUCCESS, -1 = ERROR
+ *
+ ******************************************************************************/
+int get_hpd_data(HANDLE devHandle, hp_info *data)
 {
 	TRACING();
 
@@ -1955,7 +1877,7 @@ int get_hpd_data(HANDLE devHandle, hp_info* data)
 	char err[256];
 	memset(err, 0, 256);
 
-	g_hdata = (struct hp_info*)malloc(sizeof(struct hp_info));
+	g_hdata = (struct hp_info *)malloc(sizeof(struct hp_info));
 	if (g_hdata == NULL) {
 		ERR("Failed to allocate HPD structure\n");
 		return DVSERVERUMD_FAILURE;
@@ -1964,9 +1886,10 @@ int get_hpd_data(HANDLE devHandle, hp_info* data)
 	SecureZeroMemory(g_hdata, sizeof(struct hp_info));
 	g_hdata->event = data->event;
 
-	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_HP_EVENT, g_hdata, sizeof(struct hp_info), g_hdata, sizeof(struct hp_info), &g_bytesReturned, NULL)) {
-		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
-			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
+	if (!DeviceIoControl(devHandle, IOCTL_DVSERVER_HP_EVENT, g_hdata, sizeof(struct hp_info), g_hdata,
+						 sizeof(struct hp_info), &g_bytesReturned, NULL)) {
+		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err,
+					   255, NULL);
 		ERR("IOCTL_DVSERVER_HPD_EVENT call failed with error: %s!\n", err);
 		free(g_hdata);
 		return DVSERVERUMD_FAILURE;
@@ -1982,7 +1905,7 @@ int get_hpd_data(HANDLE devHandle, hp_info* data)
 
 bool IsWindows11OrLater()
 {
-	OSVERSIONINFOEX osvi = { sizeof(OSVERSIONINFOEX) };
+	OSVERSIONINFOEX osvi = {sizeof(OSVERSIONINFOEX)};
 	DWORDLONG conditionMask = 0;
 	BOOL result = FALSE;
 	DWORD error = 0;
@@ -1994,18 +1917,14 @@ bool IsWindows11OrLater()
 	VER_SET_CONDITION(conditionMask, VER_BUILDNUMBER, VER_GREATER_EQUAL);
 
 	result = VerifyVersionInfo(&osvi, VER_MAJORVERSION | VER_BUILDNUMBER, conditionMask);
-	if (!result)
-	{
+	if (!result) {
 		error = GetLastError();
-		if (error == ERROR_OLD_WIN_VERSION)
-		{
+		if (error == ERROR_OLD_WIN_VERSION) {
 			DBGPRINT("OS version is older than Windows 11");
 			return false;
-		}
-		else
-		{
+		} else {
 			// Unexpected error occurred
-			ERR("VerifyVersionInfo failed with error: %d",error);
+			ERR("VerifyVersionInfo failed with error: %d", error);
 			return false;
 		}
 	}
@@ -2041,7 +1960,6 @@ DWORD GetGpuDeviceId()
 			std::string instanceIdStr(size_needed, 0);
 			WideCharToMultiByte(CP_UTF8, 0, instanceId.c_str(), -1, &instanceIdStr[0], size_needed, nullptr, nullptr);
 
-
 			if (std::regex_search(instanceIdStr, match, deviceIdRegex)) {
 				try {
 					deviceIdFromPci = std::stoul(match[1].str(), nullptr, 16);
@@ -2051,8 +1969,7 @@ DWORD GetGpuDeviceId()
 						deviceIdFromPci = 0;
 					}
 					break;
-				}
-				catch (const std::exception&) {
+				} catch (const std::exception &) {
 					ERR("Error parsing Device ID from string: %s\n", match[1].str().c_str());
 				}
 			}
