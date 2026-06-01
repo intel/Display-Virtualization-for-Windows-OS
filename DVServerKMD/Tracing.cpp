@@ -19,6 +19,7 @@ Environment:
 #include "Driver.h"
 #include "Trace.h"
 #include "tracing.tmh"
+#include "Trace_override.h"
 
 /*******************************************************************************
  *

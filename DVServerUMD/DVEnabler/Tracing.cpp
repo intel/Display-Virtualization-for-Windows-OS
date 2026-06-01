@@ -11,6 +11,7 @@
 #include "pch.h"
 #include "Trace.h"
 #include "Tracing.tmh"
+#include "Trace_override.h"
 
 /*******************************************************************************
  *

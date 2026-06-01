@@ -10,6 +10,7 @@
 
 #include "DVServeredid.h"
 #include <DVServeredid.tmh>
+#include "Trace_override.h"
 
 using namespace Microsoft::IndirectDisp;
 PSP_DEVICE_INTERFACE_DETAIL_DATA device_iface_edid_data;

@@ -176,6 +176,7 @@
     <ClInclude Include="framework.h" />
     <ClInclude Include="pch.h" />
     <ClInclude Include="Trace.h" />
+    <ClInclude Include="Trace_override.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="dllmain.cpp" />
@@ -198,9 +199,6 @@
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
-    <Exec 
-    Command="&quot;$(SolutionDir)generate_version_header.bat&quot; &quot;$(ProjectDir)DVEnabler_Version.txt&quot; &quot;$(ProjectDir)&quot;" 
-    WorkingDirectory="$(ProjectDir)" 
-    />
+    <Exec Command="&quot;$(SolutionDir)generate_version_header.bat&quot; &quot;$(ProjectDir)DVEnabler_Version.txt&quot; &quot;$(ProjectDir)&quot;" WorkingDirectory="$(ProjectDir)" />
   </Target>
 </Project>

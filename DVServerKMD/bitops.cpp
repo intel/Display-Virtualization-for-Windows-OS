@@ -1,6 +1,7 @@
 #include "bitops.h"
 #include "Trace.h"
 #include <bitops.tmh>
+#include "Trace_override.h"
 
 #pragma code_seg(push)
 #pragma code_seg()

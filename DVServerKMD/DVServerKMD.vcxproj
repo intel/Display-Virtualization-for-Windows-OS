@@ -18,6 +18,7 @@
     <ClCompile Include="bitops.cpp" />
     <ClCompile Include="Device.cpp" />
     <ClCompile Include="Driver.cpp" />
+    <ClCompile Include="IoctlValidation.cpp" />
     <ClCompile Include="Queue.cpp" />
     <ClCompile Include="Tracing.cpp" />
     <ClCompile Include="viogpulite.cpp" />
@@ -31,11 +32,13 @@
     <ClInclude Include="Device.h" />
     <ClInclude Include="Driver.h" />
     <ClInclude Include="edid.h" />
+    <ClInclude Include="IoctlValidation.h" />
     <ClInclude Include="qemu_edid.h" />
     <ClInclude Include="helper.h" />
     <ClInclude Include="Public.h" />
     <ClInclude Include="Queue.h" />
     <ClInclude Include="Trace.h" />
+    <ClInclude Include="Trace_override.h" />
     <ClInclude Include="viogpu.h" />
     <ClInclude Include="viogpulite.h" />
     <ClInclude Include="viogpu_idr.h" />
@@ -84,11 +87,11 @@
   <PropertyGroup />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-	<Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
-	<Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
+    <Inf2CatUseLocalTime>true</Inf2CatUseLocalTime>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -154,9 +157,6 @@ certmgr -del -c -n "DVServerKMD" -s PrivateCertStore</Command>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
   <Target Name="GenerateVersionHeader" BeforeTargets="ClCompile">
-   <Exec 
-    Command="&quot;$(SolutionDir)generate_version_header.bat&quot; &quot;$(ProjectDir)DVServerKMD_Version.txt&quot; &quot;$(ProjectDir)&quot;" 
-    WorkingDirectory="$(ProjectDir)" 
-   />
- </Target>
+    <Exec Command="&quot;$(SolutionDir)generate_version_header.bat&quot; &quot;$(ProjectDir)DVServerKMD_Version.txt&quot; &quot;$(ProjectDir)&quot;" WorkingDirectory="$(ProjectDir)" />
+  </Target>
 </Project>

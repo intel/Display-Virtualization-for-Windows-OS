@@ -106,6 +106,84 @@ bin\tracelog.exe -stop Mytrace
 Step-5
 open realtime.txt from tracing dir which contains the traces.
 
+-----------------------------------------------------------
+#####  Steps to capture Boot Trace Logs  #####
+-----------------------------------------------------------
+1. Create the following .reg files with the content shown below.
+
+-----------------------------------------------------------
+DVKMD.reg
+-----------------------------------------------------------
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServerkmd]
+"GUID"="{DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1}"
+"Start"=dword:00000001
+"Status"=dword:00000000
+"FileName"="%SystemRoot%\\System32\\LogFiles\\WMI\\kmd.etl"
+"ClockType"=dword:00000002
+"fileMax"=dword:00000032
+"FileCounter"=dword:0000000a
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServerkmd\{DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1}]
+"Status"=dword:00000000
+"Enabled"=dword:00000001
+"EnableLevel"=dword:00000005
+"EnableFlags"=dword:0000ffff
+
+
+-----------------------------------------------------------
+DVUMD.reg
+-----------------------------------------------------------
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServer]
+"GUID"="{351BC0B2-53AB-4c14-8851-3b80f878badc}"
+"Start"=dword:00000001
+"Status"=dword:00000000
+"FileName"="%SystemRoot%\\System32\\LogFiles\\WMI\\umd.etl"
+"ClockType"=dword:00000002
+"fileMax"=dword:00000032
+"FileCounter"=dword:0000000a
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServer\{351BC0B2-53AB-4c14-8851-3b80f878badc}]
+"Status"=dword:00000000
+"Enabled"=dword:00000001
+"EnableLevel"=dword:00000005
+"EnableFlags"=dword:0000ffff
+
+
+-----------------------------------------------------------
+DVEnabler.reg
+-----------------------------------------------------------
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVEnabler]
+"GUID"="{5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F}"
+"Start"=dword:00000001
+"Status"=dword:00000000
+"FileName"="%SystemRoot%\\System32\\LogFiles\\WMI\\dve.etl"
+"ClockType"=dword:00000002
+"fileMax"=dword:00000032
+"FileCounter"=dword:0000000a
+
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVEnabler\{5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F}]
+"Status"=dword:00000000
+"Enabled"=dword:00000001
+"EnableLevel"=dword:00000005
+"EnableFlags"=dword:0000ffff
+
+
+2. Open PowerShell in Administrator mode.
+
+3. Execute the relevant .reg files as required. If all logs are required, execute them:
+   a) DVKMD.reg
+   b) DVUMD.reg
+   c) DVEnabler.reg
+
+4. Reboot the VM to apply the registry changes.
+
+5. Boot ETL logs will be generated at: %SystemRoot%\System32\LogFiles\WMI\
+   At every reboot, a separate file will be generated in this path.
+   Expected files:
+	- kmd.etl.xx --> for DVServerKMD
+	- umd.etl.xx --> for DVServerUMD
+	- dve.etl.xx --> for DVEnabler
+
 ---------------------------------------------------------------------------
 #####  Steps to install Drivers using DVInstaller in commandline  #####
 ---------------------------------------------------------------------------

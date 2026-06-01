@@ -36,6 +36,7 @@
 #include "qemu_edid.h"
 #include "Trace.h"
 #include <viogpulite.tmh>
+#include "Trace_override.h"
 
 extern "C" {
 #include "..\EDIDParser\edidshared.h"
@@ -567,6 +568,7 @@ NTSTATUS VioGpuAdapterLite::ExecutePresentDisplayZeroCopy(_In_ BYTE *SrcAddr, _I
 {
 	PAGED_CODE();
 	TRACING();
+	UNREFERENCED_PARAMETER(SrcBytesPerPixel);
 
 	BLT_INFO SrcBltInfo = {0};
 	BLT_INFO DstBltInfo = {0};

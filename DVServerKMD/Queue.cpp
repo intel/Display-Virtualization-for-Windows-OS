@@ -23,7 +23,9 @@ Environment:
 #include "Public.h"
 #include "edid.h"
 #include "Trace.h"
+#include "IoctlValidation.h"
 #include <Queue.tmh>
+#include "Trace_override.h"
 extern "C" {
 #include "..\EDIDParser\edidshared.h"
 }
@@ -322,11 +324,9 @@ static NTSTATUS IoctlRequestSetMode(const PDEVICE_CONTEXT DeviceContext, const s
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
-	if (ptr->screen_num >= MAX_SCAN_OUT) {
-		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
-			ptr->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-		return STATUS_INVALID_PARAMETER;
+	status = ValidateIoctl(ptr, Request, VALIDATE_FRAME);
+	if (status != STATUS_SUCCESS) {
+		return status;
 	}
 
 	CURRENT_MODE tempCurrentMode = {0};
@@ -445,18 +445,9 @@ static NTSTATUS IoctlRequestPresentFb(const PDEVICE_CONTEXT DeviceContext, const
 		return status;
 	}
 
-	if (ptr->screen_num >= MAX_SCAN_OUT) {
-		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
-			ptr->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-		return STATUS_INVALID_PARAMETER;
-	}
-
-	if ((ptr->width > MAX_WIDTH_SIZE) || (ptr->height > MAX_HEIGHT_SIZE)) {
-		ERR("Invalid frame dimensions: width=%d, height=%d. Max allowed size is %dx%d.\n", ptr->width, ptr->height,
-			MAX_WIDTH_SIZE, MAX_HEIGHT_SIZE);
-		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-		return STATUS_INVALID_PARAMETER;
+	status = ValidateIoctl(ptr, Request, VALIDATE_FRAME);
+	if (status != STATUS_SUCCESS) {
+		return status;
 	}
 
 	status = pAdapter->ExecutePresentDisplayZeroCopy((BYTE *)ptr->addr, ptr->bitrate, ptr->pitch, ptr->width,
@@ -495,6 +486,12 @@ static NTSTATUS IoctlRequestPresentFb(const PDEVICE_CONTEXT DeviceContext, const
 		WdfRequestComplete(Request, status);
 		return status;
 	}
+
+	if (BuffersOverlap(inputBuffer, InputBufferLength, outBuffer, OutputBufferLength)) {
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
 	output->retval = DVSERVERKMD_SUCCESS;
 	WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 	return STATUS_SUCCESS;
@@ -537,11 +534,9 @@ static NTSTATUS IoctlRequestEdid(const PDEVICE_CONTEXT DeviceContext, const size
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
-	if (edata->screen_num >= MAX_SCAN_OUT) {
-		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
-			edata->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-		return STATUS_INVALID_PARAMETER;
+	status = ValidateIoctl(edata, Request, VALIDATE_EDID);
+	if (status != STATUS_SUCCESS) {
+		return status;
 	}
 
 	if (OutputBufferLength < sizeof(struct edid_info)) {
@@ -602,6 +597,11 @@ static NTSTATUS IoctlRequestTotalScreens(const PDEVICE_CONTEXT DeviceContext, co
 		return STATUS_INSUFFICIENT_RESOURCES;
 	}
 
+	status = ValidateIoctl(mdata, Request, VALIDATE_TOTAL_SCREENS);
+	if (status != STATUS_SUCCESS) {
+		return status;
+	}
+
 	mdata->total_screens = pAdapter->GetNumScreens();
 	WdfRequestSetInformation(Request, sizeof(struct screen_info));
 
@@ -655,6 +655,12 @@ static NTSTATUS IoctlRequestHPEventInfo(const PDEVICE_CONTEXT DeviceContext, con
 		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
 		return STATUS_INSUFFICIENT_RESOURCES;
 	}
+
+	 status = ValidateIoctl(info, Request, VALIDATE_HP_EVENT);
+	if (status != STATUS_SUCCESS) {
+		return status;
+	}
+
 	pAdapter->SetEvent(info->event);
 	pAdapter->FillPresentStatus(info);
 	WdfRequestSetInformation(Request, sizeof(struct hp_info));
@@ -742,18 +748,9 @@ static NTSTATUS IoctlSetPointerShape(const PDEVICE_CONTEXT DeviceContext, const 
 		return status;
 	}
 
-	if (cptr->screen_num >= MAX_SCAN_OUT) {
-		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
-			cptr->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-		return STATUS_INVALID_PARAMETER;
-	}
-
-	if ((cptr->width > POINTER_SIZE) || (cptr->height > POINTER_SIZE)) {
-		ERR("Invalid cursor dimensions: width=%d, height=%d. Max allowed is %d.\n", cptr->width, cptr->height,
-			POINTER_SIZE);
-		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-		return STATUS_INVALID_PARAMETER;
+	status = ValidateIoctl(cptr, Request, VALIDATE_CURSOR);
+	if (status != STATUS_SUCCESS) {
+		return status;
 	}
 
 	RtlZeroMemory(&pointerShape, sizeof(POINTER_SHAPE));
@@ -801,6 +798,12 @@ static NTSTATUS IoctlSetPointerShape(const PDEVICE_CONTEXT DeviceContext, const 
 		WdfRequestComplete(Request, status);
 		return status;
 	}
+
+	if (BuffersOverlap(inputBuffer, InputBufferLength, outBuffer, OutputBufferLength)) {
+		WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+		return STATUS_INVALID_PARAMETER;
+	}
+
 	output->retval = DVSERVERKMD_SUCCESS;
 	WdfRequestSetInformation(Request, sizeof(struct KMDF_IOCTL_Response));
 	return STATUS_SUCCESS;
@@ -838,17 +841,9 @@ static NTSTATUS IoctlSetPointerPosition(const PDEVICE_CONTEXT DeviceContext, con
 		return STATUS_INVALID_USER_BUFFER;
 	}
 
-	if (cptr == NULL) {
-		ERR("Input buffer is NULL\n");
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return STATUS_UNSUCCESSFUL;
-	}
-
-	if (cptr->screen_num >= MAX_SCAN_OUT) {
-		ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
-			cptr->screen_num, MAX_SCAN_OUT);
-		WdfRequestComplete(Request, STATUS_INSUFFICIENT_RESOURCES);
-		return STATUS_INVALID_PARAMETER;
+	status = ValidateIoctl(cptr, Request, VALIDATE_CURSOR_POSITION);
+	if (status != STATUS_SUCCESS) {
+		return status;
 	}
 
 	RtlZeroMemory(&pointerPosition, sizeof(DXGKARG_SETPOINTERPOSITION));

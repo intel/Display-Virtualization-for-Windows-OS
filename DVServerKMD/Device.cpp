@@ -19,6 +19,7 @@ Environment:
 #include "viogpulite.h"
 #include "Trace.h"
 #include <Device.tmh>
+#include "Trace_override.h"
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(PAGE, DVServerKMDCreateDevice)

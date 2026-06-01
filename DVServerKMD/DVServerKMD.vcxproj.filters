@@ -72,6 +72,12 @@
     <ClInclude Include="edid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Trace_override.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IoctlValidation.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="baseobj.cpp">
@@ -104,8 +110,16 @@
     <ClCompile Include="Tracing.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="IoctlValidation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <Text Include="DVServerKMD_Version.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="DVServerKMD.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
   </ItemGroup>
 </Project>

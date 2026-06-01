@@ -20,6 +20,7 @@ Environment:
 #include "Trace.h"
 #include "Driver.tmh"
 #include "DVServercommon.h"
+#include "Trace_override.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -317,6 +318,7 @@ NTSTATUS DVServerUMDDeviceD0Exit(WDFDEVICE Device, WDF_POWER_DEVICE_STATE Target
 {
 	UNREFERENCED_PARAMETER(Device);
 	DBGPRINT("TargetState = %d", TargetState);
+	UNREFERENCED_PARAMETER(TargetState);
 	HANDLE hp_event = NULL;
 	TRACING();
 

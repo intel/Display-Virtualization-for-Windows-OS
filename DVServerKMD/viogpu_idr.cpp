@@ -34,6 +34,7 @@
 #if !DBG
 #include "viogpu_idr.tmh"
 #endif
+#include "Trace_override.h"
 
 VioGpuIdr::VioGpuIdr()
 {

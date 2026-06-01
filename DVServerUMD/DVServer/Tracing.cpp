@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <tchar.h>
 #include <Windows.h>
+#include "Trace_override.h"
 
 /*******************************************************************************
  *

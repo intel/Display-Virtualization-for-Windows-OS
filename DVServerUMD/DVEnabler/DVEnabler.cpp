@@ -14,6 +14,7 @@
 #include <Windows.h>
 #include <stdio.h>
 #include <string.h>
+#include "Trace_override.h"
 
 int dvenabler_init()
 {

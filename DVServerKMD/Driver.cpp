@@ -17,6 +17,7 @@ Environment:
 #include "driver.h"
 #include "Trace.h"
 #include <Driver.tmh>
+#include "Trace_override.h"
 extern "C" {
 #include "kdebugprint.h"
 tDebugPrintFunc VirtioDebugPrintProc;

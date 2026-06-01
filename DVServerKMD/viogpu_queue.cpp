@@ -32,6 +32,7 @@
 #include "baseobj.h"
 #include "Trace.h"
 #include "viogpu_queue.tmh"
+#include "Trace_override.h"
 
 static BOOLEAN BuildSGElement(VirtIOBufferDescriptor *sg, PVOID buf, ULONG size)
 {
@@ -467,6 +468,7 @@ void CtrlQueue::ResFlush(UINT res_id, UINT width, UINT height, UINT x, UINT y, U
 	cmd->r.height = height;
 	cmd->r.x = x;
 	cmd->r.y = y;
+	cmd->hdr.flags |= VIRTIO_GPU_FLAG_FENCE;
 
 	if (vbuf == NULL) {
 		return;

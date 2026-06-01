@@ -31,6 +31,7 @@
 #if !DBG
 #include "viogpu_pci.tmh"
 #endif
+#include "Trace_override.h"
 
 u32 ReadVirtIODeviceRegister(ULONG_PTR ulRegister)
 {
