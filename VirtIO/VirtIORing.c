@@ -310,6 +310,7 @@ static void *virtqueue_get_buf_split(struct virtqueue *_vq, /* the queue */
 	struct virtqueue_split *vq = splitvq(_vq);
 	void *opaque;
 	u16 idx;
+	u32 id;
 
 	if (vq->last_used == (int)vq->vring.used->idx) {
 		/* No descriptor index in the used ring */
@@ -321,7 +322,13 @@ static void *virtqueue_get_buf_split(struct virtqueue *_vq, /* the queue */
 	*len = vq->vring.used->ring[idx].len;
 
 	/* Get the first used descriptor */
-	idx = (u16)vq->vring.used->ring[idx].id;
+	id = vq->vring.used->ring[idx].id;
+	if (id >= vq->vring.num) {
+		DPrintf(0, "Virtqueue %u: used id %u out of range (max %u)\n", _vq->index, id, vq->vring.num);
+		vq->last_used++;
+		return NULL;
+	}
+	idx = (u16)id;
 	opaque = vq->opaque[idx];
 
 	/* Put all descriptors back to the free list */

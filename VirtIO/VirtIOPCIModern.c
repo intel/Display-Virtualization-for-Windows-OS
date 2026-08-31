@@ -54,6 +54,10 @@ static void *vio_modern_map_capability(VirtIODevice *vdev, int cap_offset, size_
 	void *addr;
 
 	pci_read_config_byte(vdev, cap_offset + offsetof(struct virtio_pci_cap, bar), &bar);
+	if (bar >= PCI_TYPE0_ADDRESSES) {
+		DPrintf(0, "invalid bar %u in capability\n", bar);
+		return NULL;
+	}
 	pci_read_config_dword(vdev, cap_offset + offsetof(struct virtio_pci_cap, offset), &bar_offset);
 	pci_read_config_dword(vdev, cap_offset + offsetof(struct virtio_pci_cap, length), &bar_length);
 
@@ -301,7 +305,8 @@ static NTSTATUS vio_modern_setup_vq(struct virtqueue **queue, VirtIODevice *vdev
 
 	vq_addr = mem_alloc_nonpaged_block(vdev, heap_size);
 	if (vq_addr == NULL) {
-		return STATUS_INSUFFICIENT_RESOURCES;
+		status = STATUS_INSUFFICIENT_RESOURCES;
+		goto err_new_queue;
 	}
 
 	/* create the vring */

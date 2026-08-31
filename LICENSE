@@ -6,7 +6,7 @@ different copyright and licensing terms.
 --------------------------------------------------------------------------
 MS-PL License
 Applicable components:
-DVServerUMD
+IntelVirtDisplayUMD
 
 Copyright (C) 2021-2024 Intel Corporation
 
@@ -73,7 +73,7 @@ SPDX-License-Identifier: MS-PL
 --------------------------------------------------------------------------
 BSD-3-Clause License
 Applicable components:
-DVServerKMD
+IntelVirtDisplayKMD
 
 Copyright (C) 2021-2024 Intel Corporation
 
@@ -108,9 +108,9 @@ SPDX-License-Identifier: BSD-3-Clause
 MIT License
 Applicable components:
 EDID Parser Lib
-DVEnabler
+IntelVirtDisplayEnabler
 Scripts
-DVInstaller (GUI)
+IntelVirtDisplayInstaller (GUI)
 
 Copyright © 2021-2024 Intel Corporation
 

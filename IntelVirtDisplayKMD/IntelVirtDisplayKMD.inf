@@ -1,0 +1,102 @@
+;
+; IntelVirtDisplayKMD.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider=%ManufacturerName%
+CatalogFile=IntelVirtDisplayKMD.cat
+DriverVer= 
+PnpLockdown=1
+
+[DestinationDirs]
+DefaultDestDir = 12
+IntelVirtDisplayKMD_Device_CoInstaller_CopyFiles = 11
+
+; ================= Class section =====================
+
+#[ClassInstall32]
+Addreg=SystemClassReg
+
+[SystemClassReg]
+HKR,,,0,%ClassName%
+HKR,,Icon,,-5
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+IntelVirtDisplayKMD.sys  = 1,,
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll=1 ; make sure the number matches with SourceDisksNames
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NTamd64.10.0...15063
+
+[Standard.NTamd64.10.0...15063]
+%IntelVirtDisplayKMD.DeviceDesc%=IntelVirtDisplayKMD_Device, PCI\VEN_1AF4&DEV_1050&CC_030000
+
+[IntelVirtDisplayKMD_Device.NT]
+CopyFiles=Drivers_Dir
+FeatureScore=01
+CopyINF = IntelVirtDisplay.inf
+
+[Drivers_Dir]
+IntelVirtDisplayKMD.sys
+
+;-------------- Service installation
+[IntelVirtDisplayKMD_Device.NT.Services]
+AddService = IntelVirtDisplayKMD,%SPSVCINST_ASSOCSERVICE%, IntelVirtDisplayKMD_Service_Inst
+
+; -------------- IntelVirtDisplayKMD driver install sections
+[IntelVirtDisplayKMD_Service_Inst]
+DisplayName    = %IntelVirtDisplayKMD.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\IntelVirtDisplayKMD.sys
+
+[IntelVirtDisplayKMD_Device.NT.HW]
+AddReg = Hw_AddReg
+
+[Hw_AddReg]
+HKR,,Security,,"D:P(A;;GA;;;BA)(A;;GA;;;SY)(A;;GA;;;UD)"
+
+;
+;--- IntelVirtDisplayKMD_Device Coinstaller installation ------
+;
+[IntelVirtDisplayKMD_Device.NT.Components]
+AddComponent=%ComponentName%,,component-install-section
+
+[component-install-section]
+ComponentIDs= %ComponentId%
+
+[IntelVirtDisplayKMD_Device.NT.CoInstallers]
+AddReg=IntelVirtDisplayKMD_Device_CoInstaller_AddReg
+CopyFiles=IntelVirtDisplayKMD_Device_CoInstaller_CopyFiles
+
+[IntelVirtDisplayKMD_Device_CoInstaller_AddReg]
+HKR,,CoInstallers32,0x00010000, "WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll,WdfCoInstaller"
+
+[IntelVirtDisplayKMD_Device_CoInstaller_CopyFiles]
+WdfCoInstaller$KMDFCOINSTALLERVERSION$.dll
+
+[IntelVirtDisplayKMD_Device.NT.Wdf]
+KmdfService =  IntelVirtDisplayKMD, IntelVirtDisplayKMD_wdfsect
+[IntelVirtDisplayKMD_wdfsect]
+KmdfLibraryVersion = $KMDFVERSION$
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ManufacturerName="Intel"
+ClassName="System"
+DiskName = "IntelVirtDisplayKMD Installation Disk"
+IntelVirtDisplayKMD.DeviceDesc = "IntelVirtDisplayKMD Device"
+IntelVirtDisplayKMD.SVCDESC = "IntelVirtDisplayKMD Service"
+ComponentName = "IntelVirtDisplay"
+ComponentId = "IntelVirtDisplay"

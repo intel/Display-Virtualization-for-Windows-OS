@@ -1,0 +1,11 @@
+/*===========================================================================
+; IntelVirtDisplay_Version.txt
+;----------------------------------------------------------------------------
+; Copyright (C) 2021 Intel Corporation
+; SPDX-License-Identifier: MS-PL
+;
+; File Description:
+;   This file will have the IntelVirtDisplay version 
+;--------------------------------------------------------------------------*/
+
+IntelVirtDisplay_Version = 5.0.2

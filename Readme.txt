@@ -1,16 +1,16 @@
-DVServer is a display virtualization driver designed for Windows VMs. The required environment for this solution to function end-to-end includes a Linux host with QEMU hypervisor and a Windows VM. This driver consists of four components.
+Intel VirtDisplay is a display virtualization driver designed for Windows VMs. The required environment for this solution to function end-to-end includes a Linux host with QEMU hypervisor and a Windows VM. This driver consists of four components.
  
-1. DVServerUMD:
-This driver leverages Microsoft IDD (Indirect Display Driver) as its foundational technology to deliver a virtual display for Windows VMs. It retrieves the frame buffer from the OS swapchain buffer and shares the frame buffer address with DVServerKMD. Communication between DVServerUMD and DVServerKMD is facilitated through IOCTLs.
+1. IntelVirtDisplayUMD:
+This driver leverages Microsoft IDD (Indirect Display Driver) as its foundational technology to deliver a virtual display for Windows VMs. It retrieves the frame buffer from the OS swapchain buffer and shares the frame buffer address with IntelVirtDisplayKMD. Communication between IntelVirtDisplayUMD and IntelVirtDisplayKMD is facilitated through IOCTLs.
  
-2. DVServerKMD:
-This driver employs the VirtIO protocol for communication with the host QEMU hypervisor. The frame buffer address obtained from DVServerUMD is forwarded to the host QEMU hypervisor, which subsequently renders the frames on the host.
+2. IntelVirtDisplayKMD:
+This driver employs the VirtIO protocol for communication with the host QEMU hypervisor. The frame buffer address obtained from IntelVirtDisplayUMD is forwarded to the host QEMU hypervisor, which subsequently renders the frames on the host.
  
-3. DVEnabler:
-DVEnabler helps disable the MSBDA monitor, allowing the Intel graphics driver to attach to the IDD monitor for executing workloads on the GPU.
+3. IntelVirtDisplayEnabler:
+IntelVirtDisplayEnabler helps disable the MSBDA monitor, allowing the Intel graphics driver to attach to the IDD monitor for executing workloads on the GPU.
  
-4. DVInstaller:
-DVInstaller, built on the Inno Setup framework, facilitates the installation of our DVServer driver. It supports both GUI and command-line installation methods.
+4. IntelVirtDisplayInstaller:
+IntelVirtDisplayInstaller, built on the Inno Setup framework, facilitates the installation of our Intel VirtDisplay driver. It supports both GUI and command-line installation methods.
  
 Key Feature Supported by the driver:
 Win10/11 support, Multi monitor, Hot Plug Detect, EDID Management
@@ -36,27 +36,27 @@ use the below command to get the display port name for that particular board (fo
 -----------------------------------------------------------
 1) Use the above QEMU cmd and boot to Windows VM
 2) Copy the Signed Zero Copy Binaries to the VM
-3) If we are building driver manually from Visual Studio, then copy DVServer.cer & DVServerKMD.cer along with other drivers
+3) If we are building driver manually from Visual Studio, then copy IntelVirtDisplay.cer & IntelVirtDisplayKMD.cer along with other drivers
 4) To install manual drivers, system requires "bcdedit /set testsigning on" & reboot before the installation
 5) Driver update may fail when switching from manual test signed driver to production driver. To fix this, we need to disable "Prioritize all digitally signed drivers equally during the driver ranking and selection process" in Group Policy (Path: Computer Configuration - Administrative Templates - System - Device Installation)
 
 -----------------------------------------------------------
 #####  Configuring 0Copy  #####
 -----------------------------------------------------------
-1) Run this command in Powershell (admin mode). DVInstaller Script will be signed, follow below step before running the DVInstaller
+1) Run this command in Powershell (admin mode). IntelVirtDisplayInstaller Script will be signed, follow below step before running the IntelVirtDisplayInstaller
 		> Set-ExecutionPolicy -ExecutionPolicy AllSigned -Scope CurrentUser
 		> This will prompt user to allow access, Press “Y/Yes” to continue
 2) Make sure ZC files copied in respective folder structure -
-	2.1) DVServer\dvserverkmd.cat, DVServer\DVServerKMD.inf, DVServer\DVServerKMD.sys
-	2.2) DVServer\dvserver.cat, DVServer\DVServer.dll, DVServer\DVServer.inf
-	2.3) DVEnabler.dll
+	2.1) IntelVirtDisplay\intelvirtdisplaykmd.cat, IntelVirtDisplay\IntelVirtDisplayKMD.inf, IntelVirtDisplay\IntelVirtDisplayKMD.sys
+	2.2) IntelVirtDisplay\intelvirtdisplay.cat, IntelVirtDisplay\IntelVirtDisplay.dll, IntelVirtDisplay\IntelVirtDisplay.inf
+	2.3) IntelVirtDisplayEnabler.dll
 3) ZC Installation
-	3.1) Open powershell in admin mode and goto ZeroCopy binary folder
-	3.2) Run : ".\DVInstaller.ps1" - This will install ZC driver and start the DVEnabler as a windows service
+	3.1) Open powershell in admin mode and goto IntelVirtDisplay binary folder
+	3.2) Run : ".\IntelVirtDisplayInstaller.ps1" - This will install ZC driver and start the IntelVirtDisplayEnabler as a windows service
 	3.3) Auto reboot will happen
 4) After successfully rebooting, check below driver entry inside device manager. There should not be a yellow bang on any of the below drivers.
-	4.1) System -->DVServerKMD driver
-	4.2) Display Adapter -->DVServerUMD Device
+	4.1) System -->IntelVirtDisplayKMD driver
+	4.2) Display Adapter -->IntelVirtDisplay Device
 5) After subsequent reboot, ZC will be kicked in automatically (No need to run any other script for ZC)
 6) To update the ZC drivers, Just repeat steps 2-5
 
@@ -79,13 +79,13 @@ use the below command to get the display port name for that particular board (fo
 Step-1
 Create 3 folders and copy the contents as described below
 1.bin /*copy tracelog,tracefmt,tracepdb from the kit or can run directly from the windows kit/pplatform folder*/
-2.pdb /*copy DVServer and DVServerkmd*/
+2.pdb /*copy IntelVirtDisplay and IntelVirtDisplaykmd*/
 3.tracing /* create guid.txt*/
 
 Add the below content to guid.txt
-5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F;DVEnablerGuid
-351BC0B2-53AB-4C14-8851-3B80F878BADC;DVserverUMDGuid
-DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1;DVserverKMDGuid
+5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F;IntelVirtDisplayEnablerGuid
+351BC0B2-53AB-4C14-8851-3B80F878BADC;IntelVirtDisplayUMDGuid
+DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1;IntelVirtDisplayKMDGuid
 
 Step-2
 Run the below command from the PDB file directory
@@ -112,9 +112,9 @@ open realtime.txt from tracing dir which contains the traces.
 1. Create the following .reg files with the content shown below.
 
 -----------------------------------------------------------
-DVKMD.reg
+IVDKMD.reg
 -----------------------------------------------------------
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServerkmd]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\IntelVirtDisplaykmd]
 "GUID"="{DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1}"
 "Start"=dword:00000001
 "Status"=dword:00000000
@@ -123,7 +123,7 @@ DVKMD.reg
 "fileMax"=dword:00000032
 "FileCounter"=dword:0000000a
 
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServerkmd\{DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1}]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\IntelVirtDisplaykmd\{DB7C7BAE-6D56-4DF0-8807-48F2FB30E3D1}]
 "Status"=dword:00000000
 "Enabled"=dword:00000001
 "EnableLevel"=dword:00000005
@@ -131,9 +131,9 @@ DVKMD.reg
 
 
 -----------------------------------------------------------
-DVUMD.reg
+IVDUMD.reg
 -----------------------------------------------------------
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServer]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\IntelVirtDisplay]
 "GUID"="{351BC0B2-53AB-4c14-8851-3b80f878badc}"
 "Start"=dword:00000001
 "Status"=dword:00000000
@@ -142,7 +142,7 @@ DVUMD.reg
 "fileMax"=dword:00000032
 "FileCounter"=dword:0000000a
 
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVServer\{351BC0B2-53AB-4c14-8851-3b80f878badc}]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\IntelVirtDisplay\{351BC0B2-53AB-4c14-8851-3b80f878badc}]
 "Status"=dword:00000000
 "Enabled"=dword:00000001
 "EnableLevel"=dword:00000005
@@ -150,18 +150,18 @@ DVUMD.reg
 
 
 -----------------------------------------------------------
-DVEnabler.reg
+IVDE.reg
 -----------------------------------------------------------
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVEnabler]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\IntelVirtDisplayEnabler]
 "GUID"="{5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F}"
 "Start"=dword:00000001
 "Status"=dword:00000000
-"FileName"="%SystemRoot%\\System32\\LogFiles\\WMI\\dve.etl"
+"FileName"="%SystemRoot%\\System32\\LogFiles\\WMI\\ivde.etl"
 "ClockType"=dword:00000002
 "fileMax"=dword:00000032
 "FileCounter"=dword:0000000a
 
-[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\DVEnabler\{5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F}]
+[HKEY_LOCAL_MACHINE\SYSTEM\ControlSet001\Control\WMI\Autologger\IntelVirtDisplayEnabler\{5E6BE9AC-16AC-40C9-BBC1-A7D39E3F463F}]
 "Status"=dword:00000000
 "Enabled"=dword:00000001
 "EnableLevel"=dword:00000005
@@ -171,39 +171,39 @@ DVEnabler.reg
 2. Open PowerShell in Administrator mode.
 
 3. Execute the relevant .reg files as required. If all logs are required, execute them:
-   a) DVKMD.reg
-   b) DVUMD.reg
-   c) DVEnabler.reg
+   a) IVDKMD.reg
+   b) IVDUMD.reg
+   c) IVDE.reg
 
 4. Reboot the VM to apply the registry changes.
 
 5. Boot ETL logs will be generated at: %SystemRoot%\System32\LogFiles\WMI\
    At every reboot, a separate file will be generated in this path.
    Expected files:
-	- kmd.etl.xx --> for DVServerKMD
-	- umd.etl.xx --> for DVServerUMD
-	- dve.etl.xx --> for DVEnabler
+	- kmd.etl.xx --> for IntelVirtDisplayKMD
+	- umd.etl.xx --> for IntelVirtDisplayUMD
+	- ivde.etl.xx --> for IntelVirtDisplayEnabler
 
 ---------------------------------------------------------------------------
-#####  Steps to install Drivers using DVInstaller in commandline  #####
+#####  Steps to install Drivers using IntelVirtDisplayInstaller in commandline  #####
 ---------------------------------------------------------------------------
 
-1. Go to the zerocopy installer directory.
+1. Go to the IntelVirtDisplay installer directory.
 2. Run below specified command and select yes in UAC prompt
 
 With restart: Installs the driver and restarts the system.
-Command: ZeroCopyInstaller.exe /VERYSILENT /SUPPRESSMSGBOXES
+Command: IntelVirtDisplayInstallerPackage.exe /VERYSILENT /SUPPRESSMSGBOXES
 
 Without restart: Installs the driver without any restart of the system.
-Command: ZeroCopyInstaller.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
+Command: IntelVirtDisplayInstallerPackage.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART
 
 /VERYSILENT: Runs silently without displaying windows.
 /SUPPRESSMSGBOXES: Supress message boxes any displayed.
 /NORESTART: Avoid the restart of the system after installer.
 
 ----------------------------------------------------------------
-#####  Steps to install Drivers using GUI DVInstaller  #####
+#####  Steps to install Drivers using GUI IntelVirtDisplayInstaller  #####
 ----------------------------------------------------------------
 
-1. Go to the zerocopy installer directory.
-2. Run ZeroCopyInstaller.exe and select yes in UAC prompt.
+1. Go to the IntelVirtDisplay installer directory.
+2. Run IntelVirtDisplayInstallerPackage.exe and select yes in UAC prompt.
