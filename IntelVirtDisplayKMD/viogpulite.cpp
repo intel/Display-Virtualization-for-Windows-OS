@@ -78,6 +78,7 @@ ScreenInfo::ScreenInfo()
 	RtlZeroMemory(&m_DisplayInfoEvent.Header, sizeof(m_DisplayInfoEvent.Header));
 	RtlZeroMemory(&m_EdidEvent.Header, sizeof(m_EdidEvent.Header));
 	RtlZeroMemory(&m_FlushEvent.Header, sizeof(m_FlushEvent.Header));
+	KeInitializeMutex(&m_segmentMutex, 0);
 }
 
 ScreenInfo::~ScreenInfo()
@@ -578,13 +579,6 @@ NTSTATUS VioGpuAdapterLite::ExecutePresentDisplayZeroCopy(_In_ BYTE *SrcAddr, _I
 	TRACING();
 	UNREFERENCED_PARAMETER(SrcBytesPerPixel);
 
-	BLT_INFO SrcBltInfo = {0};
-	BLT_INFO DstBltInfo = {0};
-	RECT rect = {0};
-	NTSTATUS status;
-
-	DBGPRINT("SrcBytesPerPixel = %d Mode = %dx%d\n", SrcBytesPerPixel, SrcWidth, SrcHeight);
-
 	CURRENT_MODE tempCurrentMode = {0};
 	tempCurrentMode.DispInfo.Width = SrcWidth;
 	tempCurrentMode.DispInfo.Height = SrcHeight;
@@ -594,12 +588,13 @@ NTSTATUS VioGpuAdapterLite::ExecutePresentDisplayZeroCopy(_In_ BYTE *SrcAddr, _I
 	tempCurrentMode.FrameBuffer.Ptr = SrcAddr;
 	tempCurrentMode.Stride = Stride;
 
-	status = SetCurrentModeExt(&tempCurrentMode);
-
-	DBGPRINT("offset = (XxYxWxH) (%dx%dx%dx%d) vs (%dx%dx%dx%d)\n", rect.left, rect.top, SrcWidth, SrcHeight, 0, 0,
-			 SrcWidth, SrcHeight);
-
+	// Lock order: m_segmentMutex must always be acquired BEFORE m_screen_mutex
+	// (m_screen_mutex is acquired inside SetCurrentModeExt).
+	// Inverting this order on any new call site will cause deadlock.
+	KeWaitForMutexObject(&m_screen[ScreenNum].m_segmentMutex, Executive, KernelMode, FALSE, NULL);
+	NTSTATUS status = SetCurrentModeExt(&tempCurrentMode);
 	Close(ScreenNum);
+	KeReleaseMutex(&m_screen[ScreenNum].m_segmentMutex, FALSE);
 
 	return status;
 }
@@ -1205,7 +1200,10 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 
 	// Update the frame segment based on the current mode
 	if (pCurrentMode->FrameBuffer.Ptr) {
-		m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.InitExt(size, pCurrentMode->FrameBuffer.Ptr);
+		if (!m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.InitExt(size, pCurrentMode->FrameBuffer.Ptr)) {
+			ERR("Failed to initialize external framebuffer segment\n");
+			return;
+		}
 	} else if (m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.GetFbVAddr() &&
 			   size > m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.GetSize()) {
 		m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.Close();

@@ -112,6 +112,7 @@ public:
 	VioGpuMemSegment m_CursorSegment;
 	BOOL m_FlushCount;
 	BOOL enabled;
+	KMUTEX m_segmentMutex;
 
 public:
 	ScreenInfo();
