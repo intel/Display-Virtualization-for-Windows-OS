@@ -123,6 +123,13 @@ NTSTATUS ValidateIoctl(const void *data, const WDFREQUEST Request, IOCTL_VALIDAT
 			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
 			return STATUS_INVALID_PARAMETER;
 		}
+		const UINT minPitch = ptr->width * 4; // X8R8G8B8: 4 bytes per pixel
+		const UINT maxPitch = MAX_WIDTH_SIZE * 4;
+		if (ptr->pitch < minPitch || ptr->pitch > maxPitch) {
+			ERR("Invalid pitch: pitch=%u, valid range=[%u..%u]\n", ptr->pitch, minPitch, maxPitch);
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
 		break;
 	}
 	case VALIDATE_CURSOR: {

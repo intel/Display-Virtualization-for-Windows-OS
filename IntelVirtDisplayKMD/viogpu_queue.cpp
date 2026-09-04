@@ -940,14 +940,18 @@ BOOLEAN VioGpuMemSegment::InitExt(_In_ UINT size, _In_ PVOID pUserAddr)
 
 		if (m_pMdl) {
 			__try {
-				MmProbeAndLockPages(m_pMdl, KernelMode, IoWriteAccess);
+				MmProbeAndLockPages(m_pMdl, UserMode, IoWriteAccess);
 			}
 #pragma prefast(                                                                                                       \
 	suppress : __WARNING_EXCEPTIONEXECUTEHANDLER,                                                                      \
 	"try/except is only able to protect against user-mode errors and these are the only errors we try to catch here");
 			__except (EXCEPTION_EXECUTE_HANDLER) {
 				ERR("Failed to lock pages with error %x\n", GetExceptionCode());
-				IoFreeMdl(m_pMdl);
+				PMDL pMdl = m_pMdl;
+				m_pMdl = NULL;
+				m_pVAddr = NULL;
+				m_bUserMemory = FALSE;
+				IoFreeMdl(pMdl);
 				return FALSE;
 			}
 
@@ -957,6 +961,8 @@ BOOLEAN VioGpuMemSegment::InitExt(_In_ UINT size, _In_ PVOID pUserAddr)
 				MmUnlockPages(m_pMdl);
 				IoFreeMdl(m_pMdl);
 				m_pMdl = NULL;
+				m_pVAddr = NULL;
+				m_bUserMemory = FALSE;
 				return FALSE;
 			}
 			m_pSGList->NumberOfElements = 0;
@@ -1020,11 +1026,14 @@ void VioGpuMemSegment::Close(void)
 			delete[] static_cast<BYTE *>(m_pVAddr);
 		} else if (m_pVAddr) {
 			UnmapFrameBuffer(m_pVAddr, (ULONG)m_Size);
-			m_bMapped = FALSE;
 		}
 	}
 
 	m_pVAddr = NULL;
+	m_bSystemMemory = FALSE;
+	m_bUserMemory = FALSE;
+	m_bMapped = FALSE;
+	m_Size = 0;
 
 	if (m_pSGList) {
 		delete[] reinterpret_cast<PBYTE>(m_pSGList);
@@ -1060,7 +1069,7 @@ BOOLEAN VioGpuObj::Init(_In_ UINT size, VioGpuMemSegment *pSegment)
 	UINT pages = BYTES_TO_PAGES(size);
 	size = pages * PAGE_SIZE;
 	if (size > pSegment->GetSize()) {
-		ERR("segment size too small = %Iu (%u)\n", m_pSegment->GetSize(), size);
+		ERR("segment size too small = %Iu (%u)\n", pSegment->GetSize(), size);
 		return FALSE;
 	}
 	m_pSegment = pSegment;
