@@ -56,22 +56,25 @@ static UINT g_InstanceId = 0;
 
 PAGED_CODE_SEG_BEGIN
 
-ScreenInfo::ScreenInfo()
+ScreenInfo::ScreenInfo(void)
 {
-	PAGED_CODE();
 	TRACING();
-
 	m_ModeInfo = NULL;
-	m_ModeCount = 0;
 	m_ModeNumbers = NULL;
 	m_CurrentMode = 0;
 	m_CustomMode = 0;
-	for (size_t i = 0; i < FRAMEBUFFER_COUNT; i++) {
+	m_ModeCount = 0;
+	for (size_t i = 0; i < FRAMEBUFFER_COUNT; ++i) {
 		m_pFrameBuf[i] = NULL;
 	}
 	m_FrontBufferIndex = 0;
+	m_FbSrcAddr = NULL;
+	m_FbWidth = 0;
+	m_FbHeight = 0;
+	m_FbStride = 0;
 	m_pCursorBuf = NULL;
 	m_FlushCount = 0;
+	m_FlushStallCount = 0;
 	enabled = FALSE;
 	RtlZeroMemory(&mode_list, sizeof(output_modelist));
 	RtlZeroMemory(&gpu_disp_mode_ext, sizeof(GPU_DISP_MODE_EXT) * MAX_MODELIST_SIZE);
@@ -193,23 +196,139 @@ NTSTATUS VioGpuAdapterLite::SetCurrentModeExt(CURRENT_MODE *pCurrentMode)
 
 		RtlCopyMemory(&m_CurrentModeInfo, pCurrentMode, sizeof(CURRENT_MODE));
 
-		if (!m_screen[pCurrentMode->DispInfo.TargetId].m_FlushCount) {
-			CreateFrameBufferObj(&m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx], FrameBufSlot::Back,
-								 pCurrentMode);
-			m_screen[pCurrentMode->DispInfo.TargetId].SwapFramebuffer();
-			DestroyFrameBufferSlotObj(pCurrentMode->DispInfo.TargetId, FrameBufSlot::Back, FALSE);
-			DBGPRINT("screen %d: setting current mode (%d x %d)\n", pCurrentMode->DispInfo.TargetId,
-					 m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx].VisScreenWidth,
-					 m_screen[pCurrentMode->DispInfo.TargetId].m_ModeInfo[idx].VisScreenHeight);
+		UINT targetId = pCurrentMode->DispInfo.TargetId;
+		ScreenInfo &scr = m_screen[targetId];
+
+		// A SET_MODE arrives when the UMD has (re)built its staging buffer --
+		// including after a swapchain restart, which the UMD can do at any time
+		// (DXGI_ERROR_ACCESS_LOST, keyed-mutex abandonment, mode change).
+		//
+		// The old swapchain may well have had a flush in flight when it was torn
+		// down. That completion is never going to be matched up now, so a
+		// non-zero m_FlushCount here is stale: leaving it set makes the very
+		// next frames hit the back-pressure path and get dropped, which freezes
+		// whatever QEMU last scanned out. Clear it so the new swapchain starts
+		// from a clean slate.
+		if (pCurrentMode->SetMode && scr.m_FlushCount) {
+			DBGPRINT("screen %d: SET_MODE with %d stale flush(es) outstanding; clearing back-pressure\n", targetId,
+					 scr.m_FlushCount);
+			scr.m_FlushCount = 0;
+			scr.m_FlushStallCount = 0;
+		}
+
+		if (scr.m_FlushCount) {
+			// A flush is still outstanding with QEMU. Skip this frame to keep
+			// the original back-pressure and avoid overwriting a buffer the
+			// host is still reading.
+			//
+			// If the host never completes the flush (a dropped completion, or a
+			// host-side stall while the guest is idle), this counter would stay
+			// non-zero and every subsequent frame would be dropped forever,
+			// leaving whatever QEMU last scanned out frozen on screen. Bound the
+			// wait: after a run of consecutive drops, assume the completion was
+			// lost, clear the back-pressure and rebuild the resource so the next
+			// present is guaranteed to reach the host.
+			scr.m_FlushStallCount++;
+			DBGPRINT("For screen %d Pending flush (%d) with Qemu so not sending another request (stall %d)\n", targetId,
+					 scr.m_FlushCount, scr.m_FlushStallCount);
+
+			if (scr.m_FlushStallCount >= FLUSH_STALL_LIMIT) {
+				ERR("screen %d: flush stalled for %d frames, forcing recovery\n", targetId, scr.m_FlushStallCount);
+				scr.m_FlushCount = 0;
+				scr.m_FlushStallCount = 0;
+				// Force a full rebuild on this pass so the host re-imports the
+				// backing rather than continuing to scan out a stale mapping.
+				scr.m_FbSrcAddr = NULL;
+			} else {
+				break;
+			}
 		} else {
-			DBGPRINT("For screen %d Pending flush (%d) with Qemu so not sending another request\n",
-					 pCurrentMode->DispInfo.TargetId, m_screen[pCurrentMode->DispInfo.TargetId].m_FlushCount);
+			scr.m_FlushStallCount = 0;
+		}
+
+		VioGpuObj *front = scr.GetFrameBufferObj(FrameBufSlot::Front);
+
+		// Reuse a single persistent scanout resource across frames. The UMD
+		// funnels every present through one staging buffer, so the guest
+		// backing pages are identical frame to frame; reusing the resource
+		// avoids the per-frame host dmabuf re-import that triggered
+		// wbinvd_on_all_cpus() and the audio jitter.
+		//
+		// Recreate when the backing actually changes: first present, a new
+		// staging address, a new stride, or a resolution change. The backing
+		// pointer alone is not sufficient -- on a mode switch the allocator can
+		// hand back the same VA, so dimensions/stride must also be checked.
+		BOOLEAN backingChanged = (front == NULL) || (scr.m_FbSrcAddr != pCurrentMode->FrameBuffer.Ptr) ||
+								 (scr.m_FbWidth != pCurrentMode->DispInfo.Width) ||
+								 (scr.m_FbHeight != pCurrentMode->DispInfo.Height) ||
+								 (scr.m_FbStride != pCurrentMode->Stride);
+
+		if (backingChanged) {
+			if (front != NULL) {
+				DestroyFrameBufferSlotObj(targetId, FrameBufSlot::Front, FALSE);
+			}
+			scr.m_FbSrcAddr = pCurrentMode->FrameBuffer.Ptr;
+			scr.m_FbWidth = pCurrentMode->DispInfo.Width;
+			scr.m_FbHeight = pCurrentMode->DispInfo.Height;
+			scr.m_FbStride = pCurrentMode->Stride;
+			CreateFrameBufferObj(&scr.m_ModeInfo[idx], FrameBufSlot::Front, pCurrentMode);
+			DBGPRINT("screen %d: created persistent framebuffer (%d x %d) stride=%d\n", targetId,
+					 scr.m_ModeInfo[idx].VisScreenWidth, scr.m_ModeInfo[idx].VisScreenHeight, pCurrentMode->Stride);
+		} else {
+			FlushFrameBufferObj(&scr.m_ModeInfo[idx], pCurrentMode);
 		}
 		break;
 	}
 
 	KeReleaseMutex(&m_screen_mutex, FALSE);
 	return status;
+}
+
+NTSTATUS VioGpuAdapterLite::ReleaseFrameBuffer(UINT32 screen_num)
+{
+	PAGED_CODE();
+	TRACING();
+
+	if (screen_num >= m_u32NumScanouts) {
+		ERR("ReleaseFrameBuffer: invalid screen %u\n", screen_num);
+		return STATUS_INVALID_PARAMETER;
+	}
+
+	// Lock order must match ExecutePresentDisplayZeroCopy: segment mutex first,
+	// then the screen mutex taken below.
+	KeWaitForMutexObject(&m_screen[screen_num].m_segmentMutex, Executive, KernelMode, FALSE, NULL);
+	KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
+
+	ScreenInfo &scr = m_screen[screen_num];
+
+	DBGPRINT("screen %u: releasing persistent framebuffer (UMD staging buffer going away)\n", screen_num);
+
+	// Point the host at nothing before the backing disappears, so it cannot keep
+	// scanning out pages the UMD is about to hand back to D3D11.
+	m_CtrlQueue.SetScanout(screen_num, 0, 0, 0, 0, 0);
+
+	if (scr.GetFrameBufferObj(FrameBufSlot::Front) != NULL) {
+		DestroyFrameBufferSlotObj(screen_num, FrameBufSlot::Front, FALSE);
+	}
+
+	// Unlock/free the MDL built over the UMD's staging pages.
+	scr.m_FrameSegment.Close();
+
+	// Forget the cached identity so the next present rebuilds from scratch.
+	scr.m_FbSrcAddr = NULL;
+	scr.m_FbWidth = 0;
+	scr.m_FbHeight = 0;
+	scr.m_FbStride = 0;
+
+	// Any flush still outstanding refers to the resource just destroyed; its
+	// completion will never be matched, so clear the back-pressure.
+	scr.m_FlushCount = 0;
+	scr.m_FlushStallCount = 0;
+
+	KeReleaseMutex(&m_screen_mutex, FALSE);
+	KeReleaseMutex(&scr.m_segmentMutex, FALSE);
+
+	return STATUS_SUCCESS;
 }
 
 NTSTATUS VioGpuAdapterLite::VioGpuAdapterLiteInit()
@@ -593,7 +712,15 @@ NTSTATUS VioGpuAdapterLite::ExecutePresentDisplayZeroCopy(_In_ BYTE *SrcAddr, _I
 	// Inverting this order on any new call site will cause deadlock.
 	KeWaitForMutexObject(&m_screen[ScreenNum].m_segmentMutex, Executive, KernelMode, FALSE, NULL);
 	NTSTATUS status = SetCurrentModeExt(&tempCurrentMode);
-	Close(ScreenNum);
+
+	// The scanout resource is persistent: it is created once and its guest
+	// backing pages are handed to the host (AttachBacking / udmabuf) for the
+	// lifetime of the resource. Do NOT call Close(ScreenNum) here, as that would
+	// call MmUnlockPages()/IoFreeMdl() and release those pages while QEMU is
+	// still importing them. Unlocked pages can be paged out or repurposed by
+	// Windows when idle, causing major screen corruption when cursor/mouse events
+	// trigger a redraw. The segment is unlocked only when the resource is
+	// recreated (mode/resolution change) or on adapter teardown.
 	KeReleaseMutex(&m_screen[ScreenNum].m_segmentMutex, FALSE);
 
 	return status;
@@ -633,89 +760,89 @@ VOID VioGpuAdapterLite::BlackOutScreen(CURRENT_MODE *pCurrentMod)
 }
 
 NTSTATUS VioGpuAdapterLite::SetPointerShape(_In_ CONST POINTER_SHAPE *pSetPointerShape, _In_ CONST UINT cf,
-                                            _In_ CONST UINT cursor_visible)
+											_In_ CONST UINT cursor_visible)
 {
-    PAGED_CODE();
-    UNREFERENCED_PARAMETER(cf);
-    UNREFERENCED_PARAMETER(cursor_visible);
+	PAGED_CODE();
+	UNREFERENCED_PARAMETER(cf);
+	UNREFERENCED_PARAMETER(cursor_visible);
 
-    TRACING();
+	TRACING();
 
-    // Adding a lock here to prevent potential memory dereferencing issues,
-    // as m_screen is utilized across multiple threads
-    KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
-    DestroyCursor(pSetPointerShape->pointer.VidPnSourceId);
-    if (CreateCursor(pSetPointerShape, cf)) {
-        PGPU_UPDATE_CURSOR crsr;
-        PGPU_VBUFFER vbuf;
-        UINT ret = 0;
-        crsr = (PGPU_UPDATE_CURSOR)m_CursorQueue.AllocCursor(&vbuf);
-        if (!crsr) {
-            ERR("Couldn't allocate %ld bytes of cursor memory\n", sizeof(*crsr));
-            KeReleaseMutex(&m_screen_mutex, FALSE);
-            return STATUS_UNSUCCESSFUL;
-        }
-        RtlZeroMemory(crsr, sizeof(*crsr));
+	// Adding a lock here to prevent potential memory dereferencing issues,
+	// as m_screen is utilized across multiple threads
+	KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
+	DestroyCursor(pSetPointerShape->pointer.VidPnSourceId);
+	if (CreateCursor(pSetPointerShape, cf)) {
+		PGPU_UPDATE_CURSOR crsr;
+		PGPU_VBUFFER vbuf;
+		UINT ret = 0;
+		crsr = (PGPU_UPDATE_CURSOR)m_CursorQueue.AllocCursor(&vbuf);
+		if (!crsr) {
+			ERR("Couldn't allocate %ld bytes of cursor memory\n", sizeof(*crsr));
+			KeReleaseMutex(&m_screen_mutex, FALSE);
+			return STATUS_UNSUCCESSFUL;
+		}
+		RtlZeroMemory(crsr, sizeof(*crsr));
 
-        crsr->pos.scanout_id = pSetPointerShape->pointer.VidPnSourceId;
-        crsr->hdr.type = VIRTIO_GPU_CMD_UPDATE_CURSOR;
-        crsr->resource_id = m_screen[pSetPointerShape->pointer.VidPnSourceId].m_pCursorBuf->GetId();
-        crsr->pos.x = pSetPointerShape->X;
-        crsr->pos.y = pSetPointerShape->Y;
-        crsr->hot_x = pSetPointerShape->pointer.XHot;
-        crsr->hot_y = pSetPointerShape->pointer.YHot;
-        ret = m_CursorQueue.QueueCursor(vbuf);
-        DBGPRINT("vbuf = %p, ret = %d\n", vbuf, ret);
-        // m_CursorSegment is not closed here: its lifetime is managed by HWInit/HWClose,
-        // and m_pCursorBuf still holds a reference to it via m_pSegment.
-        KeReleaseMutex(&m_screen_mutex, FALSE);
-        if (ret == 0) {
-            return STATUS_SUCCESS;
-        }
-    } else {
-        KeReleaseMutex(&m_screen_mutex, FALSE);
-    }
-    ERR("Failed to create cursor\n");
-    return STATUS_UNSUCCESSFUL;
+		crsr->pos.scanout_id = pSetPointerShape->pointer.VidPnSourceId;
+		crsr->hdr.type = VIRTIO_GPU_CMD_UPDATE_CURSOR;
+		crsr->resource_id = m_screen[pSetPointerShape->pointer.VidPnSourceId].m_pCursorBuf->GetId();
+		crsr->pos.x = pSetPointerShape->X;
+		crsr->pos.y = pSetPointerShape->Y;
+		crsr->hot_x = pSetPointerShape->pointer.XHot;
+		crsr->hot_y = pSetPointerShape->pointer.YHot;
+		ret = m_CursorQueue.QueueCursor(vbuf);
+		DBGPRINT("vbuf = %p, ret = %d\n", vbuf, ret);
+		// m_CursorSegment is not closed here: its lifetime is managed by HWInit/HWClose,
+		// and m_pCursorBuf still holds a reference to it via m_pSegment.
+		KeReleaseMutex(&m_screen_mutex, FALSE);
+		if (ret == 0) {
+			return STATUS_SUCCESS;
+		}
+	} else {
+		KeReleaseMutex(&m_screen_mutex, FALSE);
+	}
+	ERR("Failed to create cursor\n");
+	return STATUS_UNSUCCESSFUL;
 }
 
 NTSTATUS VioGpuAdapterLite::SetPointerPosition(_In_ CONST DXGKARG_SETPOINTERPOSITION *pSetPointerPosition)
 {
-    PAGED_CODE();
-    TRACING();
+	PAGED_CODE();
+	TRACING();
 
-    // Adding a lock here to prevent potential memory dereferencing issues,
-    // as m_screen is utilized across multiple threads
-    KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
-    VioGpuObj *cursorBuf = m_screen[pSetPointerPosition->VidPnSourceId].m_pCursorBuf;
-    if (cursorBuf != NULL) {
-        PGPU_UPDATE_CURSOR crsr;
-        PGPU_VBUFFER vbuf;
-        UINT ret = 0;
-        crsr = (PGPU_UPDATE_CURSOR)m_CursorQueue.AllocCursor(&vbuf);
-        if (!crsr) {
-            ERR("Couldn't allocate %ld bytes of cursor memory\n", sizeof(*crsr));
-            KeReleaseMutex(&m_screen_mutex, FALSE);
-            return STATUS_UNSUCCESSFUL;
-        }
-        RtlZeroMemory(crsr, sizeof(*crsr));
+	// Adding a lock here to prevent potential memory dereferencing issues,
+	// as m_screen is utilized across multiple threads
+	KeWaitForMutexObject(&m_screen_mutex, Executive, KernelMode, FALSE, NULL);
+	VioGpuObj *cursorBuf = m_screen[pSetPointerPosition->VidPnSourceId].m_pCursorBuf;
+	if (cursorBuf != NULL) {
+		PGPU_UPDATE_CURSOR crsr;
+		PGPU_VBUFFER vbuf;
+		UINT ret = 0;
+		crsr = (PGPU_UPDATE_CURSOR)m_CursorQueue.AllocCursor(&vbuf);
+		if (!crsr) {
+			ERR("Couldn't allocate %ld bytes of cursor memory\n", sizeof(*crsr));
+			KeReleaseMutex(&m_screen_mutex, FALSE);
+			return STATUS_UNSUCCESSFUL;
+		}
+		RtlZeroMemory(crsr, sizeof(*crsr));
 
-        crsr->pos.scanout_id = pSetPointerPosition->VidPnSourceId;
-        crsr->hdr.type = VIRTIO_GPU_CMD_MOVE_CURSOR;
-        crsr->resource_id = cursorBuf->GetId();
-        crsr->pos.x = pSetPointerPosition->X;
-        crsr->pos.y = pSetPointerPosition->Y;
+		crsr->pos.scanout_id = pSetPointerPosition->VidPnSourceId;
+		crsr->hdr.type = VIRTIO_GPU_CMD_MOVE_CURSOR;
+		crsr->resource_id = cursorBuf->GetId();
+		crsr->pos.x = pSetPointerPosition->X;
+		crsr->pos.y = pSetPointerPosition->Y;
 
-        ret = m_CursorQueue.QueueCursor(vbuf);
-        DBGPRINT("vbuf = %p, ret = %d\n", vbuf, ret);
-        KeReleaseMutex(&m_screen_mutex, FALSE);
-        if (ret == 0) {
-            return STATUS_SUCCESS;
-        }
-    } else {
-        KeReleaseMutex(&m_screen_mutex, FALSE);
-    }
-    return STATUS_UNSUCCESSFUL;
+		ret = m_CursorQueue.QueueCursor(vbuf);
+		DBGPRINT("vbuf = %p, ret = %d\n", vbuf, ret);
+		KeReleaseMutex(&m_screen_mutex, FALSE);
+		if (ret == 0) {
+			return STATUS_SUCCESS;
+		}
+	} else {
+		KeReleaseMutex(&m_screen_mutex, FALSE);
+	}
+	return STATUS_UNSUCCESSFUL;
 }
 
 BOOLEAN VioGpuAdapterLite::GetDisplayInfo(UINT32 screen_num)
@@ -817,8 +944,7 @@ void VioGpuAdapterLite::AddEdidModes(UINT32 screen_num)
 				(USHORT)m_screen[screen_num].mode_list.modelist[i].width;
 			m_screen[screen_num].gpu_disp_mode_ext[i].YResolution =
 				(USHORT)m_screen[screen_num].mode_list.modelist[i].height;
-			m_screen[screen_num].gpu_disp_mode_ext[i].refresh =
-				m_screen[screen_num].mode_list.modelist[i].refresh_rate;
+			m_screen[screen_num].gpu_disp_mode_ext[i].refresh = m_screen[screen_num].mode_list.modelist[i].refresh_rate;
 		}
 	}
 }
@@ -872,7 +998,8 @@ NTSTATUS VioGpuAdapterLite::GetModeList(DXGK_DISPLAY_INFORMATION *pDispInfo)
 		m_screen[i].Reset();
 
 		ProcessEdid(i);
-		while ((m_screen[i].gpu_disp_mode_ext[ModeCount].XResolution >= MIN_WIDTH_SIZE) &&
+		while ((ModeCount < MAX_MODELIST_SIZE) &&
+			   (m_screen[i].gpu_disp_mode_ext[ModeCount].XResolution >= MIN_WIDTH_SIZE) &&
 			   (m_screen[i].gpu_disp_mode_ext[ModeCount].YResolution >= MIN_HEIGHT_SIZE))
 			ModeCount++;
 
@@ -881,6 +1008,7 @@ NTSTATUS VioGpuAdapterLite::GetModeList(DXGK_DISPLAY_INFORMATION *pDispInfo)
 		if (!m_screen[i].m_ModeInfo) {
 			Status = STATUS_NO_MEMORY;
 			ERR("VioGpuAdapterLite::GetModeList failed to allocate m_ModeInfo memory\n");
+			KeReleaseMutex(&m_screen_mutex, FALSE);
 			return Status;
 		}
 		RtlZeroMemory(m_screen[i].m_ModeInfo, sizeof(VIDEO_MODE_INFORMATION) * ModeCount);
@@ -889,6 +1017,7 @@ NTSTATUS VioGpuAdapterLite::GetModeList(DXGK_DISPLAY_INFORMATION *pDispInfo)
 		if (!m_screen[i].m_ModeNumbers) {
 			Status = STATUS_NO_MEMORY;
 			ERR("VioGpuAdapterLite::GetModeList failed to allocate m_ModeNumbers memory\n");
+			KeReleaseMutex(&m_screen_mutex, FALSE);
 			return Status;
 		}
 		RtlZeroMemory(m_screen[i].m_ModeNumbers, sizeof(USHORT) * ModeCount);
@@ -1179,6 +1308,34 @@ void VioGpuAdapterLite::DestroyFrameBufferCursorObjExt()
 }
 
 PAGED_CODE_SEG_BEGIN
+void VioGpuAdapterLite::FlushFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE *pCurrentMode)
+{
+	PAGED_CODE();
+	TRACING();
+
+	UINT targetId = pCurrentMode->DispInfo.TargetId;
+	VioGpuObj *obj = m_screen[targetId].GetFrameBufferObj(FrameBufSlot::Front);
+	if (obj == NULL) {
+		ERR("FlushFrameBufferObj: no persistent framebuffer for screen %d\n", targetId);
+		return;
+	}
+	UINT resid = (UINT)obj->GetId();
+
+	// Blob (udmabuf) resources are read directly from the guest pages, so a
+	// flush alone re-scans the updated content. Non-blob resources still need
+	// the pixels re-uploaded first.
+	if (!m_bBlobSupported) {
+		m_CtrlQueue.TransferToHost2D(resid, 0, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, 0, 0, NULL);
+	}
+
+	m_screen[targetId].m_FlushCount++;
+	m_CtrlQueue.ResFlush(resid, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, 0, 0, targetId,
+						 &m_screen[targetId].m_FlushEvent);
+
+	pCurrentMode->FrameBuffer.Ptr = obj->GetVirtualAddress();
+	pCurrentMode->Flags.FrameBufferIsActive = TRUE;
+}
+
 void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, FrameBufSlot bufSlot,
 											 CURRENT_MODE *pCurrentMode)
 {
@@ -1200,8 +1357,12 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 
 	// Update the frame segment based on the current mode
 	if (pCurrentMode->FrameBuffer.Ptr) {
+		if (m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.GetFbVAddr()) {
+			m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.Close();
+		}
 		if (!m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.InitExt(size, pCurrentMode->FrameBuffer.Ptr)) {
 			ERR("Failed to initialize external framebuffer segment\n");
+			m_Idr.PutId(resid);
 			return;
 		}
 	} else if (m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment.GetFbVAddr() &&
@@ -1213,15 +1374,24 @@ void VioGpuAdapterLite::CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, 
 	obj = new (NonPagedPoolNx) VioGpuObj();
 	if (obj == NULL) {
 		ERR("Failed to allocate VioGpuObj\n");
+		m_Idr.PutId(resid);
 		return;
 	}
 	if (!obj->Init(size, &m_screen[pCurrentMode->DispInfo.TargetId].m_FrameSegment)) {
 		ERR("Failed to init obj size = %d\n", size);
 		delete obj;
+		m_Idr.PutId(resid);
 		return;
 	}
 
 	GpuObjectAttach(resid, obj, pModeInfo->VisScreenWidth, pModeInfo->VisScreenHeight, pCurrentMode->Stride);
+
+	// Clear the new scanout backing before the first flush so the host doesn't
+	// scan out the UMD's stale staging buffer for one frame during a mode change.
+
+	if (obj->GetVirtualAddress()) {
+		RtlZeroMemory(obj->GetVirtualAddress(), size);
+	}
 
 	if (m_bBlobSupported) {
 		m_CtrlQueue.SetScanoutBlob(pCurrentMode->DispInfo.TargetId, resid, pModeInfo->VisScreenWidth,
@@ -1262,6 +1432,10 @@ BOOLEAN VioGpuAdapterLite::CreateCursor(_In_ CONST POINTER_SHAPE *pSetPointerSha
 	}
 
 	obj = new (NonPagedPoolNx) VioGpuObj();
+	if (!obj) {
+		ERR("Failed to allocate VioGpuObj\n");
+		return FALSE;
+	}
 	if (!obj->Init(size, &m_screen[pSetPointerShape->pointer.VidPnSourceId].m_CursorSegment)) {
 		ERR("Failed to init obj size = %d\n", size);
 		delete obj;
@@ -1355,14 +1529,22 @@ BOOLEAN VioGpuAdapterLite::GpuObjectAttach(UINT res_id, VioGpuObj *obj, ULONGLON
 VOID VioGpuAdapterLite::SetEvent(HANDLE event)
 {
 	TRACING();
-	NTSTATUS status;
-	/* If the UMD has provided us with an event and we don't have it initialized already */
-	if (event && !hpd_event) {
-		status = ObReferenceObjectByHandle(event, SYNCHRONIZE | EVENT_MODIFY_STATE, *ExEventObjectType, UserMode,
-										   (PVOID *)&hpd_event, NULL);
-		if (status != STATUS_SUCCESS) {
-			ERR("Couldn't retrieve event from handle. Error is %d\n", status);
-		}
+
+	if (!event)
+		return;
+
+	PKEVENT newEvent = NULL;
+	NTSTATUS status = ObReferenceObjectByHandle(event, SYNCHRONIZE | EVENT_MODIFY_STATE, *ExEventObjectType, UserMode,
+												(PVOID *)&newEvent, NULL);
+	if (!NT_SUCCESS(status)) {
+		ERR("Couldn't retrieve event from handle. Error is %x\n", status);
+		return;
+	}
+
+	/* Atomically store only if not already set; drop the extra reference if we lost the race */
+	PKEVENT prev = (PKEVENT)InterlockedCompareExchangePointer((PVOID *)&hpd_event, newEvent, NULL);
+	if (prev != NULL) {
+		ObDereferenceObject(newEvent);
 	}
 }
 

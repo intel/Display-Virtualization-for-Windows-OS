@@ -1,4 +1,5 @@
 #pragma once
+#pragma warning(disable: 6553 28193 6101 28726 28183 6031 28197 28198 6211)
 
 #define NOMINMAX
 #include <windows.h>
@@ -34,16 +35,6 @@ DEFINE_GUID(GUID_DEVINTERFACE_INTELVIRTDISPLAYKMD, 0x1c514918, 0xa855, 0x460a, 0
 
 #define WINDOWS11_MAJOR_VERSION 10
 #define WINDOWS11_BUILD_NUMBER 22000 // Windows 11 starts from Build 22000
-
-typedef enum FrameType
-{
-	FRAME_TYPE_INVALID,
-	FRAME_TYPE_BGRA,   // BGRA interleaved: B,G,R,A 32bpp
-	FRAME_TYPE_RGBA,   // RGBA interleaved: R,G,B,A 32bpp
-	FRAME_TYPE_RGBA10, // RGBA interleaved: R,G,B,A 10,10,10,2 bpp
-	FRAME_TYPE_YUV420, // YUV420
-	FRAME_TYPE_MAX,	   // sentinel value
-} FrameType;
 
 namespace Microsoft {
 namespace WRL {
@@ -136,10 +127,18 @@ private:
 	D3D11_MAPPED_SUBRESOURCE m_staging_buffer;
 	D3D11_TEXTURE2D_DESC m_input_desc, m_staging_desc;
 	uint32_t m_width, m_height, m_pitch, m_stride;
-	FrameType m_format;
+	color_format m_format;
 	HANDLE m_GPUResourceMutex;
 	uint32_t m_frame_statistics_counter;
 	BOOL m_resolution_changed;
+	// TRUE while m_destimage holds a live Map() that must stay in place for the
+	// lifetime of the KMD's persistent scanout resource. See GetFrameData().
+	BOOL m_staging_mapped;
+	// Last staging address actually published to the KMD, and whether it is
+	// meaningful yet. Used to detect D3D11 relocating the staging buffer without
+	// reading uninitialised heap on the first frame of a swapchain.
+	void *m_last_reported_addr;
+	BOOL m_staging_addr_valid;
 
 	// IOCTL related buffers
 	ULONG m_ioctlresp_size;

@@ -1,0 +1,12 @@
+.vs
+EdidParser/x64/
+IntelVirtDisplayKMD/IntelVirtDisplayKMD.vcxproj.user
+IntelVirtDisplayKMD/x64/
+IntelVirtDisplayUMD/IntelVirtDisplay/IntelVirtDisplay.ruleset
+IntelVirtDisplayUMD/IntelVirtDisplay/x64/
+IntelVirtDisplayUMD/IntelVirtDisplayEnabler/IntelVirtDisplayEnabler.vcxproj.user
+IntelVirtDisplayUMD/IntelVirtDisplayEnabler/x64/
+VirtIO/objchk_win10_amd64/
+VirtIO/objfre_win10_amd64/
+VirtIO/VirtioLib.vcxproj.user
+x64

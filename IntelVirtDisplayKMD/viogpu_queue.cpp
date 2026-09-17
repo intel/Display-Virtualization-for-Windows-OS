@@ -927,6 +927,9 @@ BOOLEAN VioGpuMemSegment::InitExt(_In_ UINT size, _In_ PVOID pUserAddr)
 	PAGED_CODE();
 	TRACING();
 
+	// Free any previously allocated resources before re-initializing
+	Close();
+
 	ASSERT(size);
 	PVOID buf = NULL;
 	UINT pages = BYTES_TO_PAGES(size);

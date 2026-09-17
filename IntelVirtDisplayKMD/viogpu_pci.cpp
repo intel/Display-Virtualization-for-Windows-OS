@@ -270,7 +270,7 @@ PVOID CPciBar::GetVA(PDXGKRNL_INTERFACE pDxgkInterface)
 void CPciBar::Unmap(void)
 {
 	if (m_BaseVA != nullptr) {
-		if (!m_bIoMapped) {
+		if (!m_bPortSpace) {
 			MmUnmapIoSpace(m_BaseVA, m_uSize);
 		}
 	}
