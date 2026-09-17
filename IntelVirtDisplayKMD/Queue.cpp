@@ -217,6 +217,41 @@ Return Value:
 		if (status != STATUS_SUCCESS)
 			return;
 		break;
+
+	case IOCTL_INTELVIRTDISPLAY_RELEASE_FB: {
+		// The UMD is about to unmap the staging buffer, so drop the scanout
+		// resource built over those pages before they go away.
+		UINT32 *pScreen = NULL;
+		VioGpuAdapterLite *pAdapter = NULL;
+
+		if (InputBufferLength < sizeof(UINT32)) {
+			ERR("RELEASE_FB input buffer too small: %Iu\n", InputBufferLength);
+			WdfRequestComplete(Request, STATUS_BUFFER_TOO_SMALL);
+			return;
+		}
+
+		status = WdfRequestRetrieveInputBuffer(Request, sizeof(UINT32), (PVOID *)&pScreen, NULL);
+		if (!NT_SUCCESS(status)) {
+			ERR("RELEASE_FB couldn't retrieve input buffer\n");
+			WdfRequestComplete(Request, STATUS_INVALID_USER_BUFFER);
+			return;
+		}
+
+		pAdapter = (VioGpuAdapterLite *)(pDeviceContext ? pDeviceContext->pvDeviceExtension : 0);
+		if (pAdapter == NULL) {
+			ERR("RELEASE_FB adapter is NULL\n");
+			WdfRequestComplete(Request, STATUS_DEVICE_NOT_READY);
+			return;
+		}
+
+		status = pAdapter->ReleaseFrameBuffer(*pScreen);
+		if (!NT_SUCCESS(status)) {
+			ERR("ReleaseFrameBuffer failed with status = 0x%x\n", status);
+			WdfRequestComplete(Request, status);
+			return;
+		}
+		break;
+	}
 	}
 
 	WdfRequestComplete(Request, STATUS_SUCCESS);
@@ -292,6 +327,24 @@ Return Value:
 	return;
 }
 
+// Translate the neutral UMD/KMD contract (color_format) into the D3DDDIFORMAT
+// the display pipeline uses internally. The UMD sends color_format values; the
+// KMD must not assume they are already D3DDDIFORMAT values.
+static D3DDDIFORMAT ColorFormatToD3DDDIFmt(unsigned int colorFormat)
+{
+	switch (colorFormat) {
+	case FRAME_TYPE_BGRA:
+		return D3DDDIFMT_A8R8G8B8;    // 21
+	case FRAME_TYPE_RGBA:
+		return D3DDDIFMT_A8B8G8R8;    // 32
+	case FRAME_TYPE_RGBA10:
+		return D3DDDIFMT_A2B10G10R10; // 31
+	default:
+		ERR("Unknown color_format %u, defaulting to A8R8G8B8\n", colorFormat);
+		return D3DDDIFMT_A8R8G8B8;
+	}
+}
+
 static NTSTATUS IoctlRequestSetMode(const PDEVICE_CONTEXT DeviceContext, const size_t InputBufferLength,
 									const size_t OutputBufferLength, const WDFREQUEST Request, size_t *BytesReturned)
 {
@@ -329,38 +382,6 @@ static NTSTATUS IoctlRequestSetMode(const PDEVICE_CONTEXT DeviceContext, const s
 		return status;
 	}
 
-	CURRENT_MODE tempCurrentMode = {0};
-	tempCurrentMode.DispInfo.Width = ptr->width;
-	tempCurrentMode.DispInfo.Height = ptr->height;
-	tempCurrentMode.DispInfo.Pitch = ptr->pitch;
-	tempCurrentMode.DispInfo.TargetId = ptr->screen_num;
-	tempCurrentMode.DispInfo.ColorFormat = (D3DDDIFORMAT)ptr->format;
-	tempCurrentMode.FrameBuffer.Ptr = (BYTE *)ptr->addr;
-	tempCurrentMode.Stride = ptr->stride;
-
-	status = pAdapter->SetCurrentModeExt(&tempCurrentMode);
-	if (status != STATUS_SUCCESS) {
-		ERR("SetCurrentModeExt failed with status = %d\n", status);
-		WdfRequestComplete(Request, STATUS_UNSUCCESSFUL);
-		return STATUS_UNSUCCESSFUL;
-	}
-
-	// BlackOutScreen
-	CURRENT_MODE CurrentMode = {0};
-	CurrentMode.DispInfo.Width = ptr->width;
-	CurrentMode.DispInfo.Height = ptr->height;
-	CurrentMode.DispInfo.Pitch = ptr->pitch;
-	CurrentMode.DispInfo.TargetId = ptr->screen_num;
-	CurrentMode.FrameBuffer.Ptr = pAdapter->GetFbVAddr(ptr->screen_num);
-	CurrentMode.Flags.FrameBufferIsActive = 1;
-
-	pAdapter->BlackOutScreen(&CurrentMode);
-
-	if (tempCurrentMode.FrameBuffer.Ptr) {
-		pAdapter->Close(ptr->screen_num);
-	}
-
-	// After ValidateIoctl and before using ptr->addr:
 	if (ptr->addr != NULL) {
 		__try {
 			SIZE_T frameSize = 0;
@@ -379,6 +400,36 @@ static NTSTATUS IoctlRequestSetMode(const PDEVICE_CONTEXT DeviceContext, const s
 			return excStatus;
 		}
 	}
+
+	CURRENT_MODE tempCurrentMode = {0};
+	tempCurrentMode.DispInfo.Width = ptr->width;
+	tempCurrentMode.DispInfo.Height = ptr->height;
+	tempCurrentMode.DispInfo.Pitch = ptr->pitch;
+	tempCurrentMode.DispInfo.TargetId = ptr->screen_num;
+	tempCurrentMode.DispInfo.ColorFormat = ColorFormatToD3DDDIFmt(ptr->color_format);
+	tempCurrentMode.FrameBuffer.Ptr = (BYTE *)ptr->addr;
+	tempCurrentMode.Stride = ptr->stride;
+	// Mark this as a mode set so SetCurrentModeExt can drop any stale flush
+	// back-pressure left over from a previous swapchain instance.
+	tempCurrentMode.SetMode = TRUE;
+
+	status = pAdapter->SetCurrentModeExt(&tempCurrentMode);
+	if (status != STATUS_SUCCESS) {
+		ERR("SetCurrentModeExt failed with status = %d\n", status);
+		WdfRequestComplete(Request, STATUS_UNSUCCESSFUL);
+		return STATUS_UNSUCCESSFUL;
+	}
+
+	// BlackOutScreen
+	CURRENT_MODE CurrentMode = {0};
+	CurrentMode.DispInfo.Width = ptr->width;
+	CurrentMode.DispInfo.Height = ptr->height;
+	CurrentMode.DispInfo.Pitch = ptr->pitch;
+	CurrentMode.DispInfo.TargetId = ptr->screen_num;
+	CurrentMode.FrameBuffer.Ptr = pAdapter->GetFbVAddr(ptr->screen_num);
+	CurrentMode.Flags.FrameBufferIsActive = 1;
+
+	pAdapter->BlackOutScreen(&CurrentMode);
 
 	return STATUS_SUCCESS;
 }
@@ -809,8 +860,9 @@ static NTSTATUS IoctlSetPointerShape(const PDEVICE_CONTEXT DeviceContext, const 
 	pointerShape.pointer.pPixels = cptr->data;
 	pointerShape.pointer.XHot = cptr->x_hot;
 	pointerShape.pointer.YHot = cptr->y_hot;
-	pointerShape.X = cptr->cursor_x;
-	pointerShape.Y = cptr->cursor_y;
+	// Clamp negative edge coordinates to 0 (see IoctlSetPointerPosition for rationale).
+	pointerShape.X = (cptr->cursor_x < 0) ? 0 : cptr->cursor_x;
+	pointerShape.Y = (cptr->cursor_y < 0) ? 0 : cptr->cursor_y;
 
 	status = pAdapter->SetPointerShape(&pointerShape, cptr->color_format, cptr->iscursorvisible);
 	if (status != STATUS_SUCCESS) {
@@ -886,6 +938,16 @@ static NTSTATUS IoctlSetPointerPosition(const PDEVICE_CONTEXT DeviceContext, con
 	status = ValidateIoctl(cptr, Request, VALIDATE_CURSOR_POSITION);
 	if (status != STATUS_SUCCESS) {
 		return status;
+	}
+
+	// A cursor's hotspot sits inside its bitmap, so near the top/left screen edges the OS-reported image
+	// origin can legitimately go negative. Clamp to the edge (0) so the cursor stays responsive there.
+	// This also prevents a signed negative from wrapping to a huge value in the unsigned virtio pos fields.
+	if (cptr->cursor_x < 0) {
+		cptr->cursor_x = 0;
+	}
+	if (cptr->cursor_y < 0) {
+		cptr->cursor_y = 0;
 	}
 
 	RtlZeroMemory(&pointerPosition, sizeof(DXGKARG_SETPOINTERPOSITION));

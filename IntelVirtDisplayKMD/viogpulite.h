@@ -69,6 +69,12 @@ typedef struct _CURRENT_MODE
 		UINT Unused : 27;
 	} Flags;
 
+	// Set when this CURRENT_MODE originates from an IOCTL_INTELVIRTDISPLAY_SET_MODE
+	// rather than a steady-state frame present. A SET_MODE means the UMD has
+	// rebuilt its staging buffer (including after a swapchain restart), so any
+	// outstanding flush back-pressure from the previous swapchain is stale.
+	BOOLEAN SetMode;
+
 	PHYSICAL_ADDRESS ZeroedOutStart;
 	PHYSICAL_ADDRESS ZeroedOutEnd;
 
@@ -86,12 +92,20 @@ typedef struct _POINTER_SHAPE
 	DXGKARG_SETPOINTERSHAPE pointer;
 } POINTER_SHAPE;
 
-enum class FrameBufSlot : UINT {
-    Front = 0,
-    Back = 1,
+enum class FrameBufSlot : UINT
+{
+	Front = 0,
+	Back = 1,
 };
 
-class ScreenInfo {
+// Number of consecutive frames that may be dropped due to an outstanding flush
+// before the KMD assumes the host completion was lost and force-recovers. At
+// ~60fps this is roughly a second of frozen output, long enough to never trip
+// during normal back-pressure but short enough to be imperceptible on recovery.
+#define FLUSH_STALL_LIMIT 60
+
+class ScreenInfo
+{
 public:
 	static constexpr size_t FRAMEBUFFER_COUNT = 2;
 	PVIDEO_MODE_INFORMATION m_ModeInfo;
@@ -107,10 +121,23 @@ public:
 	KEVENT m_FlushEvent;
 	VioGpuMemSegment m_FrameSegment;
 	// important must be alligned to because of InterlockedExchangePointer usage
-	VioGpuObj* m_pFrameBuf[FRAMEBUFFER_COUNT];
-	VioGpuObj* m_pCursorBuf;
+	VioGpuObj *m_pFrameBuf[FRAMEBUFFER_COUNT];
+	// Guest backing pointer the persistent Front resource was built from;
+	// used to detect when the scanout resource must be recreated.
+	PVOID m_FbSrcAddr;
+	// Dimensions the persistent Front resource was built for; a resolution
+	// change must force a recreate even when m_FbSrcAddr is unchanged.
+	UINT m_FbWidth;
+	UINT m_FbHeight;
+	// Stride/pitch the persistent Front resource and scanout-blob were configured
+	// with; a change requires recreate to avoid host reading with stale layout.
+	UINT m_FbStride;
+	VioGpuObj *m_pCursorBuf;
 	VioGpuMemSegment m_CursorSegment;
 	BOOL m_FlushCount;
+	// Number of consecutive frames dropped because m_FlushCount stayed non-zero.
+	// Guards against a lost/dropped flush completion wedging the screen forever.
+	UINT m_FlushStallCount;
 	BOOL enabled;
 	KMUTEX m_segmentMutex;
 
@@ -121,14 +148,15 @@ public:
 	ULONG GetModeCount(void) { return m_ModeCount; }
 	USHORT GetModeNumber(USHORT idx) { return m_ModeNumbers[idx]; }
 	USHORT GetCurrentModeIndex(void) { return m_CurrentMode; }
-	VioGpuObj* GetFrameBufferObj(FrameBufSlot buf);
+	VioGpuObj *GetFrameBufferObj(FrameBufSlot buf);
 	UINT GetFrameBufferIndex(FrameBufSlot bufSlot);
-	void SetFrameBufferObj(VioGpuObj* buf, FrameBufSlot bufType);
+	void SetFrameBufferObj(VioGpuObj *buf, FrameBufSlot bufType);
 	void SwapFramebuffer();
 	void SetCurrentModeIndex(USHORT idx) { m_CurrentMode = idx; }
 	void SetCustomDisplay(_In_ USHORT xres, _In_ USHORT yres);
 	void SetVideoModeInfo(UINT Idx, PGPU_DISP_MODE_EXT pModeInfo);
 	void Reset();
+
 private:
 	UINT m_FrontBufferIndex;
 };
@@ -179,6 +207,9 @@ public:
 	VioGpuAdapterLite(_In_ PVOID pvDeviceContext);
 	~VioGpuAdapterLite(void);
 	NTSTATUS SetCurrentModeExt(CURRENT_MODE *pCurrentMode);
+	// Tear down the persistent scanout resource for a screen. Called when the
+	// UMD is about to unmap the staging buffer those guest pages belong to.
+	NTSTATUS ReleaseFrameBuffer(UINT32 screen_num);
 	NTSTATUS SetPowerState(DEVICE_POWER_STATE DevicePowerState);
 	NTSTATUS HWInit(WDFCMRESLIST pResList, DXGK_DISPLAY_INFORMATION *pDispInfo);
 	NTSTATUS HWClose(void);
@@ -217,10 +248,11 @@ private:
 	void ProcessEdid(UINT32 screen_num);
 	BOOLEAN GetEdids(UINT32 screen_num);
 	void AddEdidModes(UINT32 screen_num);
-	void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, FrameBufSlot bufType, CURRENT_MODE* pCurrentMode);
+	void CreateFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, FrameBufSlot bufType, CURRENT_MODE *pCurrentMode);
+	void FlushFrameBufferObj(PVIDEO_MODE_INFORMATION pModeInfo, CURRENT_MODE *pCurrentMode);
 	void DestroyFrameBufferSlotObj(UINT32 screen_num, FrameBufSlot bufSlot, BOOLEAN bReset);
-	void DestroyFrameBufferObj(VioGpuObj** ppFbuf, BOOLEAN bReset);
-	BOOLEAN CreateCursor(_In_ CONST POINTER_SHAPE* pSetPointerShape, _In_ CONST UINT cf);
+	void DestroyFrameBufferObj(VioGpuObj **ppFbuf, BOOLEAN bReset);
+	BOOLEAN CreateCursor(_In_ CONST POINTER_SHAPE *pSetPointerShape, _In_ CONST UINT cf);
 	void DestroyCursor(UINT32 screen_num);
 	BOOLEAN GpuObjectAttach(UINT res_id, VioGpuObj *obj, ULONGLONG width, ULONGLONG height, ULONGLONG stride);
 	void static ThreadWork(_In_ PVOID Context);

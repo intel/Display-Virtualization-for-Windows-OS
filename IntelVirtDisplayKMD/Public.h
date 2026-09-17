@@ -33,12 +33,26 @@ DEFINE_GUID(GUID_DEVINTERFACE_IntelVirtDisplayKMD, 0x1c514918, 0xa855, 0x460a, 0
 #define IOCTL_INTELVIRTDISPLAY_GET_TOTAL_SCREENS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x813, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_INTELVIRTDISPLAY_HP_EVENT CTL_CODE(FILE_DEVICE_UNKNOWN, 0x814, METHOD_BUFFERED, FILE_ANY_ACCESS)
 #define IOCTL_INTELVIRTDISPLAY_CURSOR_POS CTL_CODE(FILE_DEVICE_UNKNOWN, 0x815, METHOD_BUFFERED, FILE_ANY_ACCESS)
+#define IOCTL_INTELVIRTDISPLAY_RELEASE_FB CTL_CODE(FILE_DEVICE_UNKNOWN, 0x816, METHOD_BUFFERED, FILE_ANY_ACCESS)
+
+// Neutral, self-contained pixel format enum used as the common language
+// between the UMD and KMD (independent of DXGI_FORMAT / D3DDDIFORMAT).
+// The KMD translates these into D3DDDIFORMAT before use.
+typedef enum color_format
+{
+	FRAME_TYPE_INVALID,
+	FRAME_TYPE_BGRA,   // BGRA interleaved: B,G,R,A 32bpp
+	FRAME_TYPE_RGBA,   // RGBA interleaved: R,G,B,A 32bpp
+	FRAME_TYPE_RGBA10, // RGBA interleaved: R,G,B,A 10,10,10,2 bpp
+	FRAME_TYPE_YUV420, // YUV420
+	FRAME_TYPE_MAX,	   // sentinel value
+} color_format;
 
 typedef struct FrameMetaData
 {
 	unsigned int width;
 	unsigned int height;
-	unsigned int format;
+	unsigned int color_format;
 	unsigned int pitch;
 	unsigned int stride;
 	UINT16 bitrate;

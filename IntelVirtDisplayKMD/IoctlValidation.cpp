@@ -130,6 +130,16 @@ NTSTATUS ValidateIoctl(const void *data, const WDFREQUEST Request, IOCTL_VALIDAT
 			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
 			return STATUS_INVALID_PARAMETER;
 		}
+		if (ptr->color_format == FRAME_TYPE_INVALID || ptr->color_format >= FRAME_TYPE_MAX) {
+			ERR("Unknown/invalid frame format: %u\n", ptr->color_format);
+			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
+			return STATUS_INVALID_PARAMETER;
+		}
+		if (ptr->color_format == FRAME_TYPE_RGBA10) {
+			ERR("Unsupported 10bpc frame format: %u\n", ptr->color_format);
+			WdfRequestComplete(Request, STATUS_NOT_SUPPORTED);
+			return STATUS_NOT_SUPPORTED;
+		}
 		break;
 	}
 	case VALIDATE_CURSOR: {
@@ -153,11 +163,6 @@ NTSTATUS ValidateIoctl(const void *data, const WDFREQUEST Request, IOCTL_VALIDAT
 		if (cptr->screen_num >= MAX_SCAN_OUT) {
 			ERR("Screen number provided by UMD: %d is greater than or equal to the maximum supported: %d by the KMD\n",
 				cptr->screen_num, MAX_SCAN_OUT);
-			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
-			return STATUS_INVALID_PARAMETER;
-		}
-		if (cptr->cursor_x < 0 || cptr->cursor_y < 0) {
-			ERR("Invalid cursor position: x=%d, y=%d\n", cptr->cursor_x, cptr->cursor_y);
 			WdfRequestComplete(Request, STATUS_INVALID_PARAMETER);
 			return STATUS_INVALID_PARAMETER;
 		}

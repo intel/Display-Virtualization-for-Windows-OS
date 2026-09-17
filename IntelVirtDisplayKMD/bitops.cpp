@@ -119,6 +119,9 @@ VOID CopyBits32_32(BLT_INFO *pDst, CONST BLT_INFO *pSrc, UINT NumRects, _In_read
 
 	TRACING();
 
+	const BOOL needsSwizzle =
+		(pDst->PixelFmt == D3DDDIFMT_A8B8G8R8 && pSrc->PixelFmt == D3DDDIFMT_A8R8G8B8);
+
 	for (UINT iRect = 0; iRect < NumRects; iRect++) {
 		CONST RECT *pRect = &pRects[iRect];
 
@@ -133,17 +136,24 @@ VOID CopyBits32_32(BLT_INFO *pDst, CONST BLT_INFO *pSrc, UINT NumRects, _In_read
 		CONST BYTE *pStartSrc =
 			((BYTE *)pSrc->pBits + (pRect->top + pSrc->Offset.y) * pSrc->Pitch + (pRect->left + pSrc->Offset.x) * 4);
 
-		for (UINT i = 0; i < NumRows; ++i) {
-			RtlCopyMemory(pStartDst, pStartSrc, BytesToCopy);
-			for (UINT j = 0; j < NumPixels; j++) {
-				RtlCopyMemory(&pStartDst[j * 4], &pStartSrc[j * 4], 4);
-				if (pDst->PixelFmt == D3DDDIFMT_A8B8G8R8 && pSrc->PixelFmt == D3DDDIFMT_A8R8G8B8) {
-					pStartDst[j * 4] = pStartSrc[j * 4 + 2];
-					pStartDst[j * 4 + 2] = pStartSrc[j * 4];
-				}
+		if (!needsSwizzle) {
+			// Fast path: identical formats, one bulk copy per row.
+			for (UINT i = 0; i < NumRows; ++i) {
+				RtlCopyMemory(pStartDst, pStartSrc, BytesToCopy);
+				pStartDst += pDst->Pitch;
+				pStartSrc += pSrc->Pitch;
 			}
-			pStartDst += pDst->Pitch;
-			pStartSrc += pSrc->Pitch;
+		} else {
+			for (UINT i = 0; i < NumRows; ++i) {
+				for (UINT j = 0; j < NumPixels; ++j) {
+					pStartDst[j * 4 + 0] = pStartSrc[j * 4 + 2]; // dst.R = src.B
+					pStartDst[j * 4 + 1] = pStartSrc[j * 4 + 1]; // dst.G = src.G
+					pStartDst[j * 4 + 2] = pStartSrc[j * 4 + 0]; // dst.B = src.R
+					pStartDst[j * 4 + 3] = pStartSrc[j * 4 + 3]; // dst.A = src.A
+				}
+				pStartDst += pDst->Pitch;
+				pStartSrc += pSrc->Pitch;
+			}
 		}
 	}
 }
@@ -183,6 +193,7 @@ UINT BPPFromPixelFormat(D3DDDIFORMAT Format)
 	case D3DDDIFMT_X8R8G8B8:
 	case D3DDDIFMT_A8B8G8R8:
 	case D3DDDIFMT_A8R8G8B8:
+	case D3DDDIFMT_A2B10G10R10:
 		return 32;
 	default:
 		VIOGPU_LOG_ASSERTION1("Unknown D3DDDIFORMAT 0x%I64x", Format);

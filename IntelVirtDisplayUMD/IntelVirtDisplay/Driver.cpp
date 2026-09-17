@@ -293,7 +293,7 @@ _Use_decl_annotations_ NTSTATUS IntelVirtDisplayUMDDeviceAdd(WDFDRIVER Driver, P
 	}
 
 	try {
-		g_monitors = new IndirectSampleMonitor[intelvirtdisplay_monitor_count];
+		g_monitors = new IndirectSampleMonitor[intelvirtdisplay_monitor_count]();
 	} catch (const std::bad_alloc e) {
 		ERR("Dynamic memory allocation failure");
 		return INTELVIRTDISPLAYUMD_FAILURE;
@@ -496,6 +496,7 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 		ERR("Failed allocating IOCTL Response structure (for frame)\n");
 		goto exit;
 	}
+	SecureZeroMemory(m_ioctlresp_frame, sizeof(struct KMDF_IOCTL_Response));
 
 	// Allocate memory for FrameMeta Data pointer
 	m_framedata = (struct FrameMetaData *)malloc(sizeof(struct FrameMetaData));
@@ -503,6 +504,10 @@ SwapChainProcessor::SwapChainProcessor(IDDCX_SWAPCHAIN hSwapChain, shared_ptr<Di
 		ERR("Failed allocating frame metadata structure\n");
 		goto exit;
 	}
+	// malloc() does not zero. This struct is handed to the KMD, and a stale
+	// ->addr here previously caused a bogus "mapping moved" report on the first
+	// frame of every swapchain.
+	SecureZeroMemory(m_framedata, sizeof(struct FrameMetaData));
 
 	m_GPUResourceMutex = CreateMutex(NULL, FALSE, NULL);
 	if (m_GPUResourceMutex == NULL) {
@@ -586,44 +591,68 @@ SwapChainProcessor::~SwapChainProcessor()
 void SwapChainProcessor::cleanup_resources()
 {
 	TRACING();
+
+	// Do this before anything else is torn down.
+	if (m_staging_addr_valid && g_DevInfo != NULL && g_DevInfo->get_Handle() != INVALID_HANDLE_VALUE) {
+		UINT32 screen = (UINT32)m_screen_num;
+		struct KMDF_IOCTL_Response resp = {0};
+		ULONG respSize = 0;
+		if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_INTELVIRTDISPLAY_RELEASE_FB, &screen, sizeof(screen), &resp,
+							 sizeof(resp), &respSize, NULL)) {
+			ERR("IOCTL_INTELVIRTDISPLAY_RELEASE_FB failed (screen %d), error %lu\n", m_screen_num, GetLastError());
+		} else {
+			DBGPRINT("Released KMD framebuffer for screen %d before unmapping staging buffer\n", m_screen_num);
+		}
+	}
+	m_staging_addr_valid = FALSE;
+	m_last_reported_addr = NULL;
+
 	// ****** Frame Resources ******
-	if (m_framedata != INVALID_HANDLE_VALUE)
+	if (m_framedata != NULL) {
 		free(m_framedata);
+		m_framedata = NULL;
+	}
 
-	if (m_ioctlresp_frame != INVALID_HANDLE_VALUE)
+	if (m_ioctlresp_frame != NULL) {
 		free(m_ioctlresp_frame);
+		m_ioctlresp_frame = NULL;
+	}
 
-	if (m_GPUResourceMutex != INVALID_HANDLE_VALUE) {
-		ReleaseMutex(m_GPUResourceMutex);
+	// CreateMutex() returns NULL (not INVALID_HANDLE_VALUE) on failure.
+	if (m_GPUResourceMutex != NULL) {
 		CloseHandle(m_GPUResourceMutex);
+		m_GPUResourceMutex = NULL;
 	}
 
 	if ((m_destimage != NULL) && (m_Device != NULL)) {
-		m_Device->DeviceContext->Unmap(m_destimage, 0);
+		if (m_staging_mapped) {
+			m_Device->DeviceContext->Unmap(m_destimage, 0);
+			m_staging_mapped = FALSE;
+		}
 		m_destimage->Release();
+		m_destimage = NULL;
+		m_staging_buffer.pData = NULL;
 	}
 
 	// ****** Cursor Resources ******
-	if (hwcursorsupported == TRUE) {
-		if (m_cursordata != NULL) {
-			free(m_cursordata);
-			m_cursordata = NULL;
-		}
+	if (m_cursordata != NULL) {
+		free(m_cursordata);
+		m_cursordata = NULL;
+	}
 
-		if (m_ioctlresp_cursor != NULL) {
-			free(m_ioctlresp_cursor);
-			m_ioctlresp_cursor = NULL;
-		}
+	if (m_ioctlresp_cursor != NULL) {
+		free(m_ioctlresp_cursor);
+		m_ioctlresp_cursor = NULL;
+	}
 
-		if (g_inputargs[m_screen_num].pShapeBuffer != NULL) {
-			free(g_inputargs[m_screen_num].pShapeBuffer);
-			g_inputargs[m_screen_num].pShapeBuffer = NULL;
-		}
+	if (g_inputargs[m_screen_num].pShapeBuffer != NULL) {
+		free(g_inputargs[m_screen_num].pShapeBuffer);
+		g_inputargs[m_screen_num].pShapeBuffer = NULL;
+	}
 
-		if (m_cursorthread_handle != INVALID_HANDLE_VALUE) {
-			CloseHandle(m_cursorthread_handle);
-			m_cursorthread_handle = NULL;
-		}
+	if (m_cursorthread_handle != NULL) {
+		CloseHandle(m_cursorthread_handle);
+		m_cursorthread_handle = NULL;
 	}
 }
 
@@ -660,6 +689,9 @@ void SwapChainProcessor::init()
 	m_staging_buffer.pData = NULL;
 	m_staging_buffer.DepthPitch = 0;
 	m_staging_buffer.RowPitch = 0;
+	m_staging_mapped = FALSE;
+	m_last_reported_addr = NULL;
+	m_staging_addr_valid = FALSE;
 	m_GPUResourceMutex = NULL;
 	m_cursorthread_handle = NULL;
 	m_ioctlresp_cursor = NULL;
@@ -867,6 +899,18 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> intelvirtdi
 
 	if (m_resolution_changed == TRUE) {
 		DBGPRINT("ResolutionChanged, setting up new staging buffer\n");
+
+		// Drop the previous staging buffer and its long-lived mapping before
+		// building the replacement.
+		if (m_destimage != NULL) {
+			if (m_staging_mapped) {
+				intelvirtdisplay_device->DeviceContext->Unmap(m_destimage, 0);
+				m_staging_mapped = FALSE;
+			}
+			m_destimage->Release();
+			m_destimage = NULL;
+		}
+
 		ZeroMemory(&m_staging_buffer, sizeof(D3D11_MAPPED_SUBRESOURCE));
 		ZeroMemory(&m_staging_desc, sizeof(m_staging_desc));
 		ZeroMemory(&m_input_desc, sizeof(m_input_desc));
@@ -886,7 +930,9 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> intelvirtdi
 			m_format = FRAME_TYPE_RGBA10;
 			break;
 		default:
-			ERR("Unsupported source format\n");
+			ERR("Unsupported source format: DXGI = %d, defaulting to BGRA\n", m_input_desc.Format);
+			m_format = FRAME_TYPE_BGRA;
+			break;
 		}
 
 		/* Configure the staging descriptor  */
@@ -907,6 +953,7 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> intelvirtdi
 		/* Check if all the parameters in the staging descriptor is proper or not */
 		if (intelvirtdisplay_device->Device->CreateTexture2D(&m_staging_desc, NULL, NULL) != S_FALSE) {
 			ERR("Failed Staging Buffer invalid configurations\n");
+			desktopimage->Release();
 			return INTELVIRTDISPLAYUMD_FAILURE;
 		}
 
@@ -914,28 +961,56 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> intelvirtdi
 		intelvirtdisplay_device->Device->CreateTexture2D(&m_staging_desc, NULL, &m_destimage);
 		if (m_destimage == NULL) {
 			ERR("Failed Staging Buffer CreateTexture2D is NULL\n");
+			desktopimage->Release();
 			return INTELVIRTDISPLAYUMD_FAILURE;
 		}
 	}
 
 	WaitForSingleObject(m_GPUResourceMutex, INFINITE);
+
+	// CopyResource requires the destination to be unmapped. Drop the persistent
+	// mapping for the duration of the copy, then re-establish it below.
+	if (m_staging_mapped) {
+		intelvirtdisplay_device->DeviceContext->Unmap(m_destimage, 0);
+		m_staging_mapped = FALSE;
+	}
+
 	intelvirtdisplay_device->DeviceContext->CopyResource((ID3D11Resource *)m_destimage, (ID3D11Resource *)desktopimage);
 	desktopimage->Release();
 	status =
 		intelvirtdisplay_device->DeviceContext->Map((ID3D11Resource *)m_destimage, 0, D3D11_MAP_READ, 0, &m_staging_buffer);
 	if (FAILED(status)) {
-		ERR("Failed to Map the resource intelvirtdisplay_device->DeviceContext->Map\n");
+		ERR("Failed to Map the resource intelvirtdisplay_device->DeviceContext->Map (0x%08X)\n", status);
 		m_destimage->Release();
+		m_destimage = NULL;
 		ReleaseMutex(m_GPUResourceMutex);
 		return INTELVIRTDISPLAYUMD_FAILURE;
 	}
+	m_staging_mapped = TRUE;
 	ReleaseMutex(m_GPUResourceMutex);
+
+	// The KMD builds a persistent virtio-gpu scanout resource over these guest
+	// pages and only rebuilds it when the reported address/geometry changes. If
+	// D3D11 ever hands back a different mapping, the KMD's cached scatter-gather
+	// list would still point at the old pages and QEMU would scan out stale
+	// memory. Force a resource rebuild whenever the mapping moves.
+	//
+	// m_framedata is heap memory that is NOT zeroed on allocation, and a fresh
+	// SwapChainProcessor starts with an uninitialised ->addr. Comparing against
+	// that garbage produced a bogus "mapping moved" report on the very first
+	// frame of every swapchain. Gate on m_staging_addr_valid instead, which is
+	// only set once we have genuinely published an address to the KMD.
+	if (m_staging_addr_valid && m_last_reported_addr != (void *)m_staging_buffer.pData) {
+		DBGPRINT("Staging mapping moved (%p -> %p), forcing KMD resource rebuild\n", m_last_reported_addr,
+				 m_staging_buffer.pData);
+		m_resolution_changed = TRUE;
+	}
 
 	m_pitch = m_staging_buffer.RowPitch;
 	m_stride = m_staging_buffer.RowPitch / 4;
 	m_framedata->width = m_width;
 	m_framedata->height = m_height;
-	m_framedata->format = INTELVIRTDISPLAYUMD_COLORFORMAT;
+	m_framedata->color_format = m_format;
 	m_framedata->pitch = m_pitch;
 	m_framedata->stride = m_stride;
 	m_framedata->bitrate = INTELVIRTDISPLAY_BBP;
@@ -946,7 +1021,7 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> intelvirtdi
 	if (!(print_counter++ % PRINT_FREQ)) {
 		DBGPRINT("m_framedata->width = %d\n", m_framedata->width);
 		DBGPRINT("m_framedata->height = %d\n", m_framedata->height);
-		DBGPRINT("m_framedata->format = %d\n", m_framedata->format);
+		DBGPRINT("m_framedata->color_format = %d\n", m_framedata->color_format);
 		DBGPRINT("m_framedata->pitch = %d\n", m_framedata->pitch);
 		DBGPRINT("m_framedata->stride = %d\n", m_framedata->stride);
 		DBGPRINT("m_framedata->bitrate = %d\n", m_framedata->bitrate);
@@ -963,22 +1038,31 @@ int SwapChainProcessor::GetFrameData(std::shared_ptr<Direct3DDevice> intelvirtdi
 			FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
 						   err, 255, NULL);
 			ERR("IOCTL_INTELVIRTDISPLAY_SET_MODE call failed with error: %s!\n", err);
-			intelvirtdisplay_device->DeviceContext->Unmap(m_destimage, 0);
-			m_destimage->Release();
 			return INTELVIRTDISPLAYUMD_FAILURE;
 		}
 		m_resolution_changed = FALSE;
 	}
 
-	if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_INTELVIRTDISPLAY_FRAME_DATA, m_framedata, sizeof(struct FrameMetaData),
-						 m_ioctlresp_frame, sizeof(struct KMDF_IOCTL_Response), &m_ioctlresp_size, NULL)) {
+	if (!DeviceIoControl(g_DevInfo->get_Handle(), IOCTL_INTELVIRTDISPLAY_FRAME_DATA, m_framedata,
+						 sizeof(struct FrameMetaData), m_ioctlresp_frame, sizeof(struct KMDF_IOCTL_Response),
+						 &m_ioctlresp_size, NULL)) {
 		FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err,
 					   255, NULL);
 		ERR("IOCTL_INTELVIRTDISPLAY_FRAME_DATA call failed with error: %s!\n", err);
-		intelvirtdisplay_device->DeviceContext->Unmap(m_destimage, 0);
-		m_destimage->Release();
 		return INTELVIRTDISPLAYUMD_FAILURE;
 	}
+
+	// Only now has the KMD actually been told about this address, so this is the
+	// correct point to record it for the next frame's move-detection.
+	m_last_reported_addr = (void *)m_staging_buffer.pData;
+	m_staging_addr_valid = TRUE;
+
+	// The staging resource stays mapped between frames. The KMD has locked these
+	// exact pages (MmProbeAndLockPages) for the lifetime of its persistent
+	// scanout resource, and QEMU imports them via udmabuf. Holding the mapping
+	// keeps the allocation pinned at a stable address so the host never scans
+	// out pages that D3D11 or the memory manager has recycled. It is dropped
+	// only for the CopyResource above, on a mode change, or in cleanup.
 
 	return INTELVIRTDISPLAYUMD_SUCCESS;
 }
@@ -1086,8 +1170,6 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT *tempshapeid, INT *tempX, 
 		bool shapeChanged = (*tempshapeid != m0_outputargs.CursorShapeInfo.ShapeId);
 		SecureZeroMemory(m_cursordata, sizeof(struct CursorData));
 		if (positionChanged) {
-			*tempX = m0_outputargs.X;
-			*tempY = m0_outputargs.Y;
 			m_cursordata->screen_num = m_screen_num;
 			m_cursordata->iscursorvisible = m0_outputargs.IsCursorVisible;
 			m_cursordata->cursor_x = m0_outputargs.X;
@@ -1097,11 +1179,16 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT *tempshapeid, INT *tempX, 
 								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_POS call failed with error: %s!\n", err);
+				// Do not advance the tracked position on failure so the next cursor event retries it.
+				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_POS call failed with error: %s! (legacy screen=%d)\n", err,
+					m_screen_num);
+			} else {
+				// Commit the tracked position only after the IOCTL succeeds.
+				*tempX = m0_outputargs.X;
+				*tempY = m0_outputargs.Y;
 			}
 		}
 		if (shapeChanged) {
-			*tempshapeid = m0_outputargs.CursorShapeInfo.ShapeId;
 			m_cursordata->screen_num = m_screen_num;
 			m_cursordata->width = m0_outputargs.CursorShapeInfo.Width;
 			m_cursordata->height = m0_outputargs.CursorShapeInfo.Height;
@@ -1118,7 +1205,12 @@ void SwapChainProcessor::ProcessCursorDataLegacy(UINT *tempshapeid, INT *tempX, 
 								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_DATA call failed with error: %s!\n", err);
+				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_DATA call failed with error: %s! DROPPED shape update "
+					"(legacy) screen=%d newShapeId=%u\n",
+					err, m_screen_num, m0_outputargs.CursorShapeInfo.ShapeId);
+			} else {
+				// Commit the tracked shape id only after the IOCTL succeeds.
+				*tempshapeid = m0_outputargs.CursorShapeInfo.ShapeId;
 			}
 		}
 	}
@@ -1143,9 +1235,6 @@ void SwapChainProcessor::ProcessCursorData(UINT *tempshapeid, UINT *tempposid, I
 		bool shapeChanged = (*tempshapeid != m_outputargs.CursorShapeInfo.ShapeId);
 		SecureZeroMemory(m_cursordata, sizeof(struct CursorData));
 		if (positionChanged) {
-			*tempposid = m_outputargs.PositionId;
-			*tempX = m_outputargs.X;
-			*tempY = m_outputargs.Y;
 			m_cursordata->screen_num = m_screen_num;
 			m_cursordata->iscursorvisible = m_outputargs.IsCursorVisible;
 			m_cursordata->cursor_x = m_outputargs.X;
@@ -1155,11 +1244,17 @@ void SwapChainProcessor::ProcessCursorData(UINT *tempshapeid, UINT *tempposid, I
 								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_POS call failed with error: %s!\n", err);
+				// Do not advance the tracked position on failure so the next cursor event retries it.
+				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_POS call failed with error: %s! (screen=%d)\n", err,
+					m_screen_num);
+			} else {
+				// Commit the tracked position only after the IOCTL succeeds.
+				*tempposid = m_outputargs.PositionId;
+				*tempX = m_outputargs.X;
+				*tempY = m_outputargs.Y;
 			}
 		}
 		if (shapeChanged) {
-			*tempshapeid = m_outputargs.CursorShapeInfo.ShapeId;
 			m_cursordata->screen_num = m_screen_num;
 			m_cursordata->width = m_outputargs.CursorShapeInfo.Width;
 			m_cursordata->height = m_outputargs.CursorShapeInfo.Height;
@@ -1176,7 +1271,12 @@ void SwapChainProcessor::ProcessCursorData(UINT *tempshapeid, UINT *tempposid, I
 								 &m_ioctlresp_size, NULL)) {
 				FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(),
 							   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), err, 255, NULL);
-				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_DATA call failed with error: %s!\n", err);
+				ERR("IOCTL_INTELVIRTDISPLAY_CURSOR_DATA call failed with error: %s! DROPPED shape update "
+					"screen=%d newShapeId=%u\n",
+					err, m_screen_num, m_outputargs.CursorShapeInfo.ShapeId);
+			} else {
+				// Commit the tracked shape id only after the IOCTL succeeds.
+				*tempshapeid = m_outputargs.CursorShapeInfo.ShapeId;
 			}
 		}
 	}
@@ -1830,7 +1930,7 @@ int hpd_event_create(IDDCX_ADAPTER AdapterObject)
 			}
 
 			// call display arrival and departure based on previous and current display state.
-			for (count = 0; count < MAX_SCAN_OUT; count++) {
+			for (count = 0; count < (int)intelvirtdisplay_monitor_count; count++) {
 
 				if (minfo[count].status != hdata.screen_present[count]) {
 					minfo[count].status = hdata.screen_present[count];
